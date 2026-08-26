@@ -269,7 +269,7 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 window.ATHWA_ENTRY = 'guest';
 
 /* ---------------- ATHWA live backend client ---------------- */
-const API_BASE = 'https://athwa-backend.onrender.com';
+const API_BASE = 'https://athwa-backend-943m.onrender.com';
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
 function getGuestToken(){ return localStorage.getItem('athwa_guest_token'); }
 function setGuestToken(tok){ if(tok) localStorage.setItem('athwa_guest_token', tok); else localStorage.removeItem('athwa_guest_token'); }
