@@ -1314,17 +1314,17 @@ function requestCheckout(){
 /* ---------------- Login (unified single form) ---------------- */
 const DEPTS_WITH_QUEUE = ['reception','housekeeping','maintenance','dining','laundry','concierge','spa','taxi'];
 const DEPT_WORKERS = {
-  reception:{ar:'هدى صالح', en:'Huda Saleh', email:'huda.reception@zahretalsharq.demo'},
-  housekeeping:{ar:'منى عبدالله', en:'Mona Abdullah', email:'mona.housekeeping@zahretalsharq.demo'},
-  maintenance:{ar:'خالد فهد', en:'Khalid Fahad', email:'khalid.maintenance@zahretalsharq.demo'},
-  dining:{ar:'الشيف عمر حسن', en:'Chef Omar Hassan', email:'omar.dining@zahretalsharq.demo'},
-  laundry:{ar:'إبراهيم يوسف', en:'Ibrahim Youssef', email:'ibrahim.laundry@zahretalsharq.demo'},
-  concierge:{ar:'سارة ناصر', en:'Sara Nasser', email:'sara.concierge@zahretalsharq.demo'},
-  spa:{ar:'ليلى أحمد', en:'Layla Ahmed', email:'layla.spa@zahretalsharq.demo'},
-  taxi:{ar:'السائق فيصل سعد', en:'Driver Faisal Saad', email:'faisal.taxi@zahretalsharq.demo'},
+  reception:{ar:'هدى صالح', en:'Huda Saleh', email:'reception'},
+  housekeeping:{ar:'منى عبدالله', en:'Mona Abdullah', email:'housekeeping'},
+  maintenance:{ar:'خالد فهد', en:'Khalid Fahad', email:'maintenance'},
+  dining:{ar:'الشيف عمر حسن', en:'Chef Omar Hassan', email:'fbeverage'},
+  laundry:{ar:'إبراهيم يوسف', en:'Ibrahim Youssef', email:'laundry'},
+  concierge:{ar:'سارة ناصر', en:'Sara Nasser', email:'concierge'},
+  spa:{ar:'ليلى أحمد', en:'Layla Ahmed', email:'spa'},
+  taxi:{ar:'السائق فيصل سعد', en:'Driver Faisal Saad', email:'taxi'},
 };
-const OWNER_NAME = {ar:'عبدالله الفيصل', en:'Abdullah Al-Faisal', email:'owner@zahretalsharq.demo'};
-const MANAGER_NAME = {ar:'نورة الحربي', en:'Nora Al-Harbi', email:'manager@zahretalsharq.demo'};
+const OWNER_NAME = {ar:'عبدالله الفيصل', en:'Abdullah Al-Faisal', email:'admin'};
+const MANAGER_NAME = {ar:'نورة الحربي', en:'Nora Al-Harbi', email:'manager'};
 
 function renderLogin(){
   const card = document.getElementById('login-card');
@@ -1337,7 +1337,7 @@ function renderLogin(){
     <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">${t('unified_sub')}</p>
     <div class="field" style="text-align:start;">
       <label>${t('identifier')}</label>
-      <input id="login-id" placeholder="512 / owner@zahretalsharq.demo" value="512">
+      <input id="login-id" placeholder="512 / admin" value="512">
     </div>
     <div class="field" style="text-align:start;">
       <label>${t('password')}</label>
