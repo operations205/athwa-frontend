@@ -1294,11 +1294,24 @@ function sendMessage(){
   el.value='';
   saveState();
   render();
-  setTimeout(()=>{
-    S.messages.push({from:'staff', text:{ar:'تم استلام رسالتك، سيتم الرد خلال دقائق.', en:'Message received, we will reply shortly.'}});
-    saveState();
-    if(CURRENT==='messages') render();
-  }, 900);
+  const thinkingMsg = {from:'staff', text:{ar:'... يفكر', en:'... thinking'}};
+  S.messages.push(thinkingMsg);
+  if(CURRENT==='messages') render();
+  apiCall('/api/concierge/ask', {method:'POST', token:getGuestToken(), body:{question:val, lang:LANG}})
+    .then(res=>{
+      const i = S.messages.indexOf(thinkingMsg);
+      if(i!==-1) S.messages.splice(i,1);
+      S.messages.push({from:'staff', text:'🤖 '+res.answer});
+      saveState();
+      if(CURRENT==='messages') render();
+    })
+    .catch(()=>{
+      const i = S.messages.indexOf(thinkingMsg);
+      if(i!==-1) S.messages.splice(i,1);
+      S.messages.push({from:'staff', text:{ar:'تعذر الوصول للمساعد الذكي الآن، سيتم تحويل رسالتك للاستقبال.', en:'Could not reach the AI assistant right now, your message will be routed to the front desk.'}});
+      saveState();
+      if(CURRENT==='messages') render();
+    });
 }
 
 function redeemOffer(name, pts){
