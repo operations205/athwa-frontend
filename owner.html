@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f7f4ee">
-<title>ATHWA | مالك الفندق</title>
-<link rel="manifest" href="manifest-owner.json">
+<title>ATHWA</title>
+<link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
@@ -238,6 +238,32 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
   <div class="login-card" id="login-card"></div>
 </div>
 
+<!-- ================= GUEST APP ================= -->
+<div id="app">
+  <div class="topbar">
+    <div class="brand"><div class="logo"><img src="" class="brand-logo-img" alt="ATHWA"></div> ATHWA</div>
+    <div class="topbar-right">
+      <button class="lang-toggle" onclick="toggleLang()"><span id="lang-label">English</span></button>
+      <button class="icon-btn" onclick="nav('messages')" title="Messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="badge" id="msg-badge">1</span>
+      </button>
+      <button class="icon-btn" onclick="nav('dashboard')" title="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg><span class="badge" id="notif-badge">2</span>
+      </button>
+      <button class="icon-btn" onclick="doLogout()" title="Logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+    </div>
+  </div>
+
+  <div class="body-wrap">
+    <nav class="sidenav" id="sidenav"></nav>
+
+    <main id="main"></main>
+  </div>
+
+  <nav class="bottomnav" id="bottomnav"></nav>
+</div>
+
+
 <!-- ================= STAFF APP ================= -->
 <div id="staff-app">
   <div class="topbar">
@@ -260,7 +286,7 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 <div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
-window.ATHWA_ENTRY = 'owner';
+window.ATHWA_ENTRY = 'unified';
 
 /* ---------------- ATHWA live backend client ---------------- */
 const API_BASE = 'https://athwa-backend-943m.onrender.com';
