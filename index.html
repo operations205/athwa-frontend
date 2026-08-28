@@ -263,6 +263,7 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
   <nav class="bottomnav" id="bottomnav"></nav>
 </div>
 
+
 <!-- ================= STAFF APP ================= -->
 <div id="staff-app">
   <div class="topbar">
@@ -512,6 +513,10 @@ function toggleLang(){
 
 /* ---------------- State ---------------- */
 const STATE_KEY = 'athwa_state_v1';
+function escapeHtml(str){
+  if(str===null || str===undefined) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function loadState(){
   const raw = localStorage.getItem(STATE_KEY);
   if(raw) return JSON.parse(raw);
@@ -1081,7 +1086,7 @@ messages(){
     ${pageHead(t('nav_messages'))}
     <div class="card chat-wrap">
       <div class="chat-log" id="chat-log">
-        ${S.messages.map(m=>`<div class="msg ${m.from==='guest'?'guest':'staff'}">${typeof m.text==='object'?m.text[LANG]:m.text}</div>`).join('')}
+        ${S.messages.map(m=>`<div class="msg ${m.from==='guest'?'guest':'staff'}">${typeof m.text==='object'?m.text[LANG]:escapeHtml(m.text)}</div>`).join('')}
       </div>
       <div class="chat-input">
         <input id="chat-in" placeholder="${t('type_message')}" onkeydown="if(event.key==='Enter') sendMessage();">
@@ -1369,14 +1374,13 @@ function renderLogin(){
     <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">${t('unified_sub')}</p>
     <div class="field" style="text-align:start;">
       <label>${t('identifier')}</label>
-      <input id="login-id" placeholder="512 / admin" value="512">
+      <input id="login-id" placeholder="512 / admin">
     </div>
     <div class="field" style="text-align:start;">
       <label>${t('password')}</label>
-      <input type="password" id="login-pass" placeholder="512420" value="512420">
+      <input type="password" id="login-pass" placeholder="•••••">
     </div>
     <button class="btn full" onclick="unifiedLogin(this)">${t('login_btn')}</button>
-    <p style="color:var(--muted); font-size:11.5px; margin:14px 0 0;">${t('demo_hint')}</p>
   `;
 }
 function staffLogout(){
@@ -1528,7 +1532,7 @@ const STAFF_RENDERERS = {
       <div class="card">
         <strong style="display:block; margin-bottom:10px;">${t('recent_requests')}</strong>
         ${all.length===0?`<p style="color:var(--muted)">${t('no_data')}</p>`:
-        all.slice(0,7).map(r=>`<div class="list-item"><span>${opsTitle(r)} <span style="color:var(--muted); font-size:12px;">— ${r.guestName} · ${t('room_label')} ${r.room}</span></span><span class="pill ${statusPillClass(r.status)}">${statusLabel(r.status)}</span></div>`).join('')}
+        all.slice(0,7).map(r=>`<div class="list-item"><span>${escapeHtml(opsTitle(r))} <span style="color:var(--muted); font-size:12px;">— ${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}</span></span><span class="pill ${statusPillClass(r.status)}">${statusLabel(r.status)}</span></div>`).join('')}
       </div>
     `;
   },
@@ -1551,7 +1555,7 @@ const STAFF_RENDERERS = {
           <div class="list-item" style="align-items:flex-start;">
             <div>
               <div>${opsTitle(r)}</div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?t('nav_'+r.dept)+' · ':''}${r.guestName} · ${t('room_label')} ${r.room}${handlerName(r)?' · '+t('handled_by')+': '+handlerName(r):''}</div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?t('nav_'+r.dept)+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
             </div>
             <div class="row" style="gap:6px;">
               <span class="pill ${statusPillClass(r.status)}">${statusLabel(r.status)}</span>
@@ -1586,10 +1590,10 @@ const STAFF_RENDERERS = {
       all.map(f=>`
         <div class="card" style="margin-bottom:12px;">
           <div class="row between">
-            <strong>${f.name} — ${t('room_label')} ${f.room}</strong>
+            <strong>${escapeHtml(f.name)} — ${t('room_label')} ${escapeHtml(f.room)}</strong>
             <span style="color:var(--warn);">${'★'.repeat(f.rating)}${'☆'.repeat(5-f.rating)}</span>
           </div>
-          <p style="color:var(--muted); font-size:13.5px; margin:8px 0 0;">${LANG==='ar'?f.commentAr:f.commentEn}</p>
+          <p style="color:var(--muted); font-size:13.5px; margin:8px 0 0;">${escapeHtml(LANG==='ar'?f.commentAr:f.commentEn)}</p>
         </div>`).join('')}
     `;
   },
