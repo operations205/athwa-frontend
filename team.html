@@ -677,7 +677,7 @@ const DICT = {
     confirm_unarchive_hotel:"هل تريد إلغاء أرشفة هذا الفندق؟",
     show_archived:"عرض المؤرشفة", hide_archived:"إخفاء المؤرشفة",
     platform_analytics_title:"إحصائيات المنصة", open_requests_kpi:"طلبات مفتوحة", requests_24h_kpi:"طلبات آخر 24 ساعة",
-    active_guests_kpi:"نزلاء نشطون", avg_rating_kpi:"متوسط التقييم", active_staff_kpi:"موظفون نشطون",
+    active_guests_kpi:"نزلاء نشطون", avg_rating_kpi:"متوسط التقييم", active_staff_kpi:"موظفون نشطون", active_users_kpi:"مستخدمون نشطون",
     per_hotel_breakdown:"تفصيل حسب الفندق",
     platform_users_title:"مستخدمو المنصة", filter_all_hotels:"كل الفنادق", col_hotel:"الفندق", no_users_yet:"لا يوجد مستخدمون",
     confirm_deactivate_user:"هل تريد تعطيل حساب هذا المستخدم؟", confirm_activate_user:"هل تريد تفعيل حساب هذا المستخدم؟",
@@ -770,7 +770,7 @@ const DICT = {
     confirm_unarchive_hotel:"Unarchive this hotel?",
     show_archived:"Show archived", hide_archived:"Hide archived",
     platform_analytics_title:"Platform Analytics", open_requests_kpi:"Open Requests", requests_24h_kpi:"Requests (24h)",
-    active_guests_kpi:"Active Guests", avg_rating_kpi:"Avg. Rating", active_staff_kpi:"Active Staff",
+    active_guests_kpi:"Active Guests", avg_rating_kpi:"Avg. Rating", active_staff_kpi:"Active Staff", active_users_kpi:"Active Users",
     per_hotel_breakdown:"Per-Hotel Breakdown",
     platform_users_title:"Platform Users", filter_all_hotels:"All Hotels", col_hotel:"Hotel", no_users_yet:"No users yet",
     col_status:"Status", col_departments:"Departments", col_user:"User", col_role:"Role", col_target:"Target", col_when:"When",
@@ -2160,7 +2160,7 @@ const STAFF_RENDERERS = {
       ${pageHead(t('platform_users_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.users, t('platform_users_title'), list.length)}
-        ${kpiCard(ICONS_ADMIN.power, t('active_hotels'), activeCount)}
+        ${kpiCard(ICONS_ADMIN.power, t('active_users_kpi'), activeCount)}
         ${kpiCard(STAFF_ICONS.hotels, t('total_hotels'), ADMIN_HOTELS.length)}
       </div>
       <div class="row between" style="margin-bottom:14px; gap:10px; flex-wrap:wrap;">
