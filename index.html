@@ -824,6 +824,7 @@ const DICT = {
     alert_billing_overdue:"فاتورة متأخرة الدفع", alert_billing_due_soon:"فاتورة مستحقة قريبًا",
     alert_stale_requests:"طلبات متأخرة أكثر من 24 ساعة", alert_low_rating:"تقييمات منخفضة آخر 30 يوم",
     alert_failed_login_spike:"محاولات دخول فاشلة متكررة",
+    alerts_critical_kpi:"تنبيهات حرجة", alerts_warning_kpi:"تحذيرات", alerts_info_kpi:"معلومات",
     search_placeholder_global:"ابحث في الفنادق، المستخدمين، النزلاء...", search_results_hotels:"الفنادق",
     search_results_users:"المستخدمون", search_results_guests:"النزلاء", search_type_min_chars:"اكتب حرفين على الأقل للبحث",
     no_search_results:"لا نتائج مطابقة",
@@ -940,6 +941,7 @@ const DICT = {
     alert_billing_overdue:"Overdue invoice", alert_billing_due_soon:"Invoice due soon",
     alert_stale_requests:"Requests open more than 24h", alert_low_rating:"Low ratings in last 30 days",
     alert_failed_login_spike:"Repeated failed login attempts",
+    alerts_critical_kpi:"Critical", alerts_warning_kpi:"Warnings", alerts_info_kpi:"Info",
     search_placeholder_global:"Search hotels, users, guests...", search_results_hotels:"Hotels",
     search_results_users:"Users", search_results_guests:"Guests", search_type_min_chars:"Type at least 2 characters to search",
     no_search_results:"No matching results",
@@ -2551,9 +2553,9 @@ const STAFF_RENDERERS = {
     return `
       ${pageHead(t('staff_nav_alerts'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
-        ${kpiCard(ICONS_ADMIN.bolt, t('col_status')+' - '+t('billing_overdue'), counts.danger)}
-        ${kpiCard(STAFF_ICONS.alerts, LANG==='ar'?'تحذيرات':'Warnings', counts.warn)}
-        ${kpiCard(ICONS_ADMIN.clockKpi, LANG==='ar'?'معلومات':'Info', counts.info)}
+        ${kpiCard(ICONS_ADMIN.bolt, t('alerts_critical_kpi'), counts.danger)}
+        ${kpiCard(STAFF_ICONS.alerts, t('alerts_warning_kpi'), counts.warn)}
+        ${kpiCard(ICONS_ADMIN.clockKpi, t('alerts_info_kpi'), counts.info)}
       </div>
       ${list.length===0?`<div class="card"><p style="color:var(--muted)">${t('no_alerts')}</p></div>`:
       list.map(a=>`
