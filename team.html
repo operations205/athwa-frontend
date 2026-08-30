@@ -383,6 +383,12 @@ let ADMIN_ANALYTICS = null;
 let ADMIN_USERS = [];
 let ADMIN_USERS_HOTEL_FILTER = 'all';
 let ADMIN_AUDIT_LOG = [];
+let ADMIN_ALERTS = [];
+let ADMIN_PLATFORM_SETTINGS = null;
+let ADMIN_PLATFORM_ADMINS = [];
+let ADMIN_ADD_ADMIN_OPEN = false;
+let ADMIN_SEARCH_QUERY = '';
+let ADMIN_SEARCH_RESULTS = null;
 // True while the super_admin has an open, in-progress form (creating a hotel
 // on the list page, or the dedicated per-hotel settings page). The 6s
 // background poll (refreshOpsData -> refreshAdminHotels) used to call
@@ -473,6 +479,7 @@ async function submitHotelSettings(id, btn){
   });
   const conciergeEl = document.getElementById('hs-concierge-enabled');
   const conciergeEnabled = !!(conciergeEl && conciergeEl.checked);
+  const billingAmountRaw = val('hs-billing-amount');
   const body = {
     name,
     enabledDepartments,
@@ -484,6 +491,11 @@ async function submitHotelSettings(id, btn){
     contactPhone: val('hs-phone'),
     contactWhatsapp: val('hs-whatsapp'),
     logoUrl: val('hs-logo'),
+    plan: val('hs-plan') || undefined,
+    billingStatus: val('hs-billing-status') || undefined,
+    billingAmount: billingAmountRaw ? Number(billingAmountRaw) : null,
+    billingNextDue: val('hs-billing-next-due') || null,
+    billingNotes: val('hs-billing-notes'),
   };
   const origText = btn.textContent; btn.disabled = true;
   try{
@@ -495,6 +507,18 @@ async function submitHotelSettings(id, btn){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }finally{
     btn.disabled = false; btn.textContent = origText;
+  }
+}
+async function markHotelPaid(id){
+  try{
+    const token = getStaffToken();
+    const nextDue = new Date(); nextDue.setDate(nextDue.getDate()+30);
+    await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body:{billingStatus:'active', billingNextDue: nextDue.toISOString().slice(0,10)}});
+    toast(t('hotel_updated_ok'));
+    await refreshAdminHotels();
+    if(STAFF_CURRENT==='hotel-settings') staffRender();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }
 }
 async function archiveHotel(id){
@@ -556,6 +580,108 @@ async function refreshAdminAuditLog(){
     if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
   }catch(e){ /* silent */ }
 }
+async function refreshAdminAlerts(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_ALERTS = await apiCall('/api/admin/alerts', {token}) || [];
+    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+  }catch(e){ /* silent */ }
+}
+async function refreshPlatformSettings(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_PLATFORM_SETTINGS = await apiCall('/api/admin/settings', {token});
+    if(S.staff.loggedIn && S.staff.role==='super_admin' && STAFF_CURRENT==='settings' && !ADMIN_ADD_ADMIN_OPEN) staffRender();
+  }catch(e){ /* silent */ }
+}
+async function refreshPlatformAdmins(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_PLATFORM_ADMINS = await apiCall('/api/admin/platform-admins', {token}) || [];
+    if(S.staff.loggedIn && S.staff.role==='super_admin' && STAFF_CURRENT==='settings' && !ADMIN_ADD_ADMIN_OPEN) staffRender();
+  }catch(e){ /* silent */ }
+}
+function toggleAddPlatformAdminForm(){
+  ADMIN_ADD_ADMIN_OPEN = !ADMIN_ADD_ADMIN_OPEN;
+  staffRender();
+}
+async function submitAddPlatformAdmin(btn){
+  const val = (elId) => { const el = document.getElementById(elId); return el ? el.value.trim() : ''; };
+  const name = val('pa-name'), email = val('pa-email'), password = val('pa-password');
+  const scopeEl = document.getElementById('pa-scope');
+  const adminScope = scopeEl ? scopeEl.value : 'readonly';
+  if(!name || !email || !password){ toast(LANG==='ar'?'كل الحقول مطلوبة':'All fields are required'); return; }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/platform-admins', {method:'POST', token, body:{name, email, password, adminScope}});
+    toast(t('platform_admin_added_ok'));
+    ADMIN_ADD_ADMIN_OPEN = false;
+    await refreshPlatformAdmins();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+async function toggleAdminPlatformAdminActive(id, currentActive){
+  const msg = currentActive ? t('confirm_deactivate_admin') : t('confirm_activate_admin');
+  if(!confirm(msg)) return;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/platform-admins/'+id, {method:'PATCH', token, body:{active: !currentActive}});
+    await refreshPlatformAdmins();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
+async function submitPlatformSettings(btn){
+  const val = (elId) => { const el = document.getElementById(elId); return el ? el.value.trim() : ''; };
+  const defaultEnabledDepartments = ALL_DEPARTMENTS.filter(d=>{
+    const el = document.getElementById('ps-dept-'+d);
+    return el && el.checked;
+  });
+  const body = {
+    platformName: val('ps-platform-name') || undefined,
+    supportEmail: val('ps-support-email'),
+    supportPhone: val('ps-support-phone'),
+    defaultEnabledDepartments,
+  };
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/settings', {method:'PATCH', token, body});
+    toast(LANG==='ar'?'تم حفظ الإعدادات':'Settings saved');
+    await refreshPlatformSettings();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+let ADMIN_SEARCH_DEBOUNCE = null;
+function onAdminGlobalSearchInput(val){
+  ADMIN_SEARCH_QUERY = val;
+  clearTimeout(ADMIN_SEARCH_DEBOUNCE);
+  ADMIN_SEARCH_DEBOUNCE = setTimeout(async ()=>{
+    if(!val || val.trim().length < 2){ ADMIN_SEARCH_RESULTS = null; staffRenderSearchResultsOnly(); return; }
+    try{
+      const token = getStaffToken();
+      ADMIN_SEARCH_RESULTS = await apiCall('/api/admin/search?q='+encodeURIComponent(val.trim()), {token});
+    }catch(e){ ADMIN_SEARCH_RESULTS = {hotels:[], users:[], guests:[]}; }
+    staffRenderSearchResultsOnly();
+  }, 300);
+}
+// Re-renders just the search page (not the whole staffRender path) so typing
+// doesn't fight with input focus - full staffRender() would blow away the
+// input element's cursor position on every keystroke.
+function staffRenderSearchResultsOnly(){
+  const el = document.getElementById('admin-search-results');
+  if(el) el.innerHTML = renderAdminSearchResults();
+}
 async function refreshOpsData(){
   try{
     // super_admin has no hotel scope - it manages hotels platform-wide, not
@@ -566,6 +692,9 @@ async function refreshOpsData(){
       if(STAFF_CURRENT==='analytics') await refreshAdminAnalytics();
       else if(STAFF_CURRENT==='users') await refreshAdminUsers();
       else if(STAFF_CURRENT==='audit') await refreshAdminAuditLog();
+      else if(STAFF_CURRENT==='alerts') await refreshAdminAlerts();
+      else if(STAFF_CURRENT==='settings') { await refreshPlatformSettings(); await refreshPlatformAdmins(); }
+      else if(STAFF_CURRENT==='search') { /* no background poll - results only refresh on input */ }
       else await refreshAdminHotels();
     } else if(S.staff.loggedIn && getStaffToken()){
       const token = getStaffToken();
@@ -684,6 +813,31 @@ const DICT = {
     audit_log_title:"سجل التدقيق", no_audit_yet:"لا يوجد سجل بعد", col_actor:"المستخدم", col_action:"الإجراء", col_time:"الوقت",
     col_status:"الحالة", col_departments:"الأقسام", col_user:"المستخدم", col_role:"الصلاحية", col_target:"الهدف", col_when:"الوقت",
     search_hotels_ph:"ابحث عن فندق...", search_users_ph:"ابحث عن مستخدم...", search_audit_ph:"ابحث في السجل...",
+    col_plan:"الباقة", col_billing:"حالة الدفع", billing_section:"الفوترة والاشتراك",
+    setting_plan:"نوع الباقة", setting_billing_status:"حالة الدفع", setting_billing_amount:"قيمة الفاتورة",
+    setting_billing_next_due:"تاريخ الاستحقاق القادم", setting_billing_notes:"ملاحظات الفوترة",
+    plan_standard:"أساسية", plan_premium:"مميزة", plan_enterprise:"مؤسسات",
+    billing_active:"سارية", billing_trial:"تجريبية", billing_overdue:"متأخرة الدفع", billing_suspended:"موقوفة",
+    mark_as_paid:"تحديد كمدفوعة",
+    staff_nav_alerts:"التنبيهات", staff_nav_search:"البحث الشامل", staff_nav_settings:"إعدادات المنصة",
+    alerts_title:"تنبيهات المنصة", no_alerts:"لا توجد تنبيهات — كل شيء تمام",
+    alert_billing_overdue:"فاتورة متأخرة الدفع", alert_billing_due_soon:"فاتورة مستحقة قريبًا",
+    alert_stale_requests:"طلبات متأخرة أكثر من 24 ساعة", alert_low_rating:"تقييمات منخفضة آخر 30 يوم",
+    alert_failed_login_spike:"محاولات دخول فاشلة متكررة",
+    search_placeholder_global:"ابحث في الفنادق، المستخدمين، النزلاء...", search_results_hotels:"الفنادق",
+    search_results_users:"المستخدمون", search_results_guests:"النزلاء", search_type_min_chars:"اكتب حرفين على الأقل للبحث",
+    no_search_results:"لا نتائج مطابقة",
+    platform_identity_section:"هوية المنصة", setting_platform_name:"اسم المنصة",
+    setting_support_email:"بريد الدعم الفني", setting_support_phone:"هاتف الدعم الفني",
+    default_departments_section:"الأقسام الافتراضية للفنادق الجديدة",
+    platform_admins_section:"مشرفو المنصة", add_platform_admin:"+ إضافة مشرف",
+    admin_scope_full:"صلاحية كاملة", admin_scope_readonly:"عرض فقط",
+    col_scope:"الصلاحية", new_admin_name:"اسم المشرف", new_admin_email:"البريد الإلكتروني",
+    new_admin_password:"كلمة المرور", new_admin_scope:"مستوى الصلاحية",
+    platform_admin_added_ok:"تم إضافة المشرف بنجاح", export_csv:"تصدير CSV",
+    readonly_admin_notice:"حسابك بصلاحية عرض فقط — بعض الإجراءات معطّلة",
+    confirm_deactivate_admin:"هل تريد تعطيل حساب هذا المشرف؟", confirm_activate_admin:"هل تريد تفعيل حساب هذا المشرف؟",
+    cannot_edit_self:"لا يمكنك تعديل حسابك الخاص من هنا",
     username:"البريد الإلكتروني", password:"كلمة المرور", select_department:"اختر القسم",
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
@@ -775,6 +929,31 @@ const DICT = {
     platform_users_title:"Platform Users", filter_all_hotels:"All Hotels", col_hotel:"Hotel", no_users_yet:"No users yet",
     col_status:"Status", col_departments:"Departments", col_user:"User", col_role:"Role", col_target:"Target", col_when:"When",
     search_hotels_ph:"Search hotels...", search_users_ph:"Search users...", search_audit_ph:"Search audit log...",
+    col_plan:"Plan", col_billing:"Billing Status", billing_section:"Billing & Subscription",
+    setting_plan:"Plan", setting_billing_status:"Billing Status", setting_billing_amount:"Invoice Amount",
+    setting_billing_next_due:"Next Due Date", setting_billing_notes:"Billing Notes",
+    plan_standard:"Standard", plan_premium:"Premium", plan_enterprise:"Enterprise",
+    billing_active:"Active", billing_trial:"Trial", billing_overdue:"Overdue", billing_suspended:"Suspended",
+    mark_as_paid:"Mark as Paid",
+    staff_nav_alerts:"Alerts", staff_nav_search:"Global Search", staff_nav_settings:"Platform Settings",
+    alerts_title:"Platform Alerts", no_alerts:"No alerts — everything looks good",
+    alert_billing_overdue:"Overdue invoice", alert_billing_due_soon:"Invoice due soon",
+    alert_stale_requests:"Requests open more than 24h", alert_low_rating:"Low ratings in last 30 days",
+    alert_failed_login_spike:"Repeated failed login attempts",
+    search_placeholder_global:"Search hotels, users, guests...", search_results_hotels:"Hotels",
+    search_results_users:"Users", search_results_guests:"Guests", search_type_min_chars:"Type at least 2 characters to search",
+    no_search_results:"No matching results",
+    platform_identity_section:"Platform Identity", setting_platform_name:"Platform Name",
+    setting_support_email:"Support Email", setting_support_phone:"Support Phone",
+    default_departments_section:"Default Departments for New Hotels",
+    platform_admins_section:"Platform Admins", add_platform_admin:"+ Add Admin",
+    admin_scope_full:"Full Access", admin_scope_readonly:"Read Only",
+    col_scope:"Access", new_admin_name:"Admin Name", new_admin_email:"Email",
+    new_admin_password:"Password", new_admin_scope:"Access Level",
+    platform_admin_added_ok:"Platform admin added successfully", export_csv:"Export CSV",
+    readonly_admin_notice:"Your account is read-only — some actions are disabled",
+    confirm_deactivate_admin:"Deactivate this admin's account?", confirm_activate_admin:"Activate this admin's account?",
+    cannot_edit_self:"You cannot edit your own account here",
     confirm_deactivate_user:"Deactivate this user's account?", confirm_activate_user:"Activate this user's account?",
     audit_log_title:"Audit Log", no_audit_yet:"No audit entries yet", col_actor:"Actor", col_action:"Action", col_time:"Time",
     username:"Email", password:"Password", select_department:"Select department",
@@ -1736,7 +1915,7 @@ async function adminLogin(btn){
     return;
   }
   setStaffToken(res.token);
-  S.staff = {loggedIn:true, role:'super_admin', dept:null, name:res.user.name};
+  S.staff = {loggedIn:true, role:'super_admin', dept:null, name:res.user.name, adminScope:res.user.adminScope||'full'};
   saveState();
   document.getElementById('login-screen').style.display='none';
   document.getElementById('staff-app').classList.add('active');
@@ -1769,12 +1948,15 @@ const STAFF_ICONS = {
   analytics:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
   users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="3"/><path d="M2 21v-1.5A4.5 4.5 0 0 1 6.5 15h5A4.5 4.5 0 0 1 16 19.5V21"/><circle cx="17.5" cy="7.5" r="2.3"/><path d="M20.5 21v-1.3a3.7 3.7 0 0 0-2.6-3.5"/></svg>',
   audit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>',
+  alerts:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
 const STAFF_NAV_BY_ROLE = {
   owner:['overview','requests','prearrivals','feedback'],
   manager:['overview','requests','prearrivals','feedback'],
   dept:['requests'],
-  super_admin:['hotels','analytics','users','audit'],
+  super_admin:['hotels','analytics','users','audit','alerts','search','settings'],
 };
 // The fixed set of guest/staff department modules the app ships with - kept
 // in sync with ALL_DEPARTMENTS in the backend's routes-hotels.js. Used to
@@ -1814,6 +1996,8 @@ function staffNav(key){
     else if(key==='users') refreshAdminUsers();
     else if(key==='audit') refreshAdminAuditLog();
     else if(key==='hotels') refreshAdminHotels();
+    else if(key==='alerts') refreshAdminAlerts();
+    else if(key==='settings'){ refreshPlatformSettings(); refreshPlatformAdmins(); }
   }
 }
 function staffRender(){
@@ -1937,6 +2121,51 @@ function chartBar(label, value, max, colorVar){
   const pct = max>0 ? Math.max(2, Math.round((value/max)*100)) : 0;
   return `<div class="chart-row"><div class="chart-label">${label}</div><div class="chart-track"><div class="chart-fill" style="width:${pct}%; background:var(${colorVar});"></div></div><div class="chart-value">${value}</div></div>`;
 }
+// Client-side CSV export - no backend round-trip, no library. `rows` is an
+// array of plain objects; `columns` is [[header, key-or-fn], ...]. Downloads
+// via a Blob + temporary <a download> (works fully offline, no server call).
+function csvEscape(v){
+  const s = v===null || v===undefined ? '' : String(v);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function exportCSV(filename, columns, rows){
+  const header = columns.map(c=>csvEscape(c[0])).join(',');
+  const body = rows.map(r=>columns.map(c=>csvEscape(typeof c[1]==='function' ? c[1](r) : r[c[1]])).join(',')).join('\n');
+  const csv = '﻿' + header + '\n' + body;
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function exportHotelsCSV(){
+  exportCSV('athwa-hotels.csv',
+    [['Name','name'],['Slug','slug'],['Status',h=>h.archived_at?'archived':(h.active?'active':'inactive')],
+     ['Plan','plan'],['Billing Status','billing_status'],['Departments',h=>(h.enabled_departments||[]).length+'/'+ALL_DEPARTMENTS.length],
+     ['Created', h=>h.created_at?new Date(h.created_at).toISOString():'']],
+    ADMIN_HOTELS);
+}
+function exportUsersCSV(){
+  const filter = ADMIN_USERS_HOTEL_FILTER;
+  const list = filter==='all' ? ADMIN_USERS : ADMIN_USERS.filter(u=>String(u.hotel_id)===String(filter));
+  exportCSV('athwa-users.csv',
+    [['Name','name'],['Email','email'],['Role','role'],['Department','department'],['Hotel','hotel_name'],['Status',u=>u.active?'active':'inactive']],
+    list);
+}
+function exportAuditCSV(){
+  exportCSV('athwa-audit-log.csv',
+    [['Action','action'],['Actor',e=>e.actor_name||e.actor_type],['Target Type','target_type'],['Target ID','target_id'],
+     ['When', e=>e.created_at?new Date(e.created_at).toISOString():'']],
+    ADMIN_AUDIT_LOG);
+}
+function exportAnalyticsCSV(){
+  if(!ADMIN_ANALYTICS) return;
+  exportCSV('athwa-analytics-per-hotel.csv',
+    [['Name','name'],['Slug','slug'],['Status',h=>h.active?'active':'inactive'],['Active Guests','active_guests'],
+     ['Open Requests','open_requests'],['Avg Rating','avg_rating'],['Staff Count','staff_count']],
+    ADMIN_ANALYTICS.perHotel);
+}
 
 /* ---------------- Staff renderers ---------------- */
 const STAFF_RENDERERS = {
@@ -1975,10 +2204,14 @@ const STAFF_RENDERERS = {
       const isArchived = !!h.archived_at;
       const searchKey = (h.name+' '+h.slug).toLowerCase();
       const deptCount = (h.enabled_departments||[]).length;
+      const billingStatus = h.billing_status || 'active';
+      const billingPillClass = billingStatus==='overdue' ? 'danger' : billingStatus==='suspended' ? 'danger' : billingStatus==='trial' ? 'info' : '';
       return `
         <tr data-search="${escapeHtml(searchKey)}">
           <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
           <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
+          <td>${t('plan_'+(h.plan||'standard'))}</td>
+          <td><span class="pill ${billingPillClass}">${t('billing_'+billingStatus)}</span></td>
           <td class="num">${deptCount}/${ALL_DEPARTMENTS.length}</td>
           <td>${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</td>
           <td class="actions">
@@ -2021,15 +2254,18 @@ const STAFF_RENDERERS = {
           <button class="btn secondary" onclick="toggleCreateHotelForm()">${t('cancel')}</button>
         </div>
       </div>
-      ${searchBar('hotels-search', t('search_hotels_ph'), "filterTableRows(this.value,'hotels-tbody')")}
+      <div class="row" style="gap:10px; align-items:flex-start;">
+        <div style="flex:1;">${searchBar('hotels-search', t('search_hotels_ph'), "filterTableRows(this.value,'hotels-tbody')")}</div>
+        <button class="btn sm secondary" onclick="exportHotelsCSV()">${t('export_csv')}</button>
+      </div>
       <div class="dtable-wrap">
         <table class="dtable">
           <thead><tr>
-            <th>${t('col_hotel')}</th><th>${t('col_status')}</th><th>${t('col_departments')}</th><th>${t('created_label')}</th><th></th>
+            <th>${t('col_hotel')}</th><th>${t('col_status')}</th><th>${t('col_plan')}</th><th>${t('col_billing')}</th><th>${t('col_departments')}</th><th>${t('created_label')}</th><th></th>
           </tr></thead>
           <tbody id="hotels-tbody">
             ${rows}
-            <tr data-empty style="display:${list.length?'none':''}"><td colspan="5" class="dtable-empty">${t('no_hotels_yet')}</td></tr>
+            <tr data-empty style="display:${list.length?'none':''}"><td colspan="7" class="dtable-empty">${t('no_hotels_yet')}</td></tr>
           </tbody>
         </table>
       </div>
@@ -2083,6 +2319,28 @@ const STAFF_RENDERERS = {
         </label>
       </div>
 
+      <div class="card" style="margin-bottom:16px;">
+        <div class="row between" style="margin-bottom:12px;">
+          <strong>${t('billing_section')}</strong>
+          <button class="btn sm secondary" onclick="markHotelPaid(${h.id})">${t('mark_as_paid')}</button>
+        </div>
+        <div class="grid grid-2">
+          <div class="field"><label>${t('setting_plan')}</label>
+            <select id="hs-plan">
+              ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${(h.plan||'standard')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>${t('setting_billing_status')}</label>
+            <select id="hs-billing-status">
+              ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>${t('setting_billing_amount')}</label><input id="hs-billing-amount" type="number" step="0.01" min="0" value="${h.billing_amount!=null?h.billing_amount:''}"></div>
+          <div class="field"><label>${t('setting_billing_next_due')}</label><input id="hs-billing-next-due" type="date" value="${h.billing_next_due ? String(h.billing_next_due).slice(0,10) : ''}"></div>
+        </div>
+        <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
+      </div>
+
       <div class="row" style="gap:8px;">
         <button class="btn" onclick="submitHotelSettings(${h.id}, this)">${t('save_changes')}</button>
         <button class="btn secondary" onclick="closeHotelSettings()">${t('cancel')}</button>
@@ -2108,7 +2366,10 @@ const STAFF_RENDERERS = {
         ${kpiCard(ICONS_ADMIN.clockKpi, t('requests_24h_kpi'), a.requests.last_24h)}
         ${kpiCard(ICONS_ADMIN.star, t('avg_rating_kpi'), a.feedback.avg_rating ?? '-')}
       </div>
-      <div class="row between" style="margin-bottom:14px;"><strong>${t('per_hotel_breakdown')}</strong></div>
+      <div class="row between" style="margin-bottom:14px;">
+        <strong>${t('per_hotel_breakdown')}</strong>
+        <button class="btn sm secondary" onclick="exportAnalyticsCSV()">${t('export_csv')}</button>
+      </div>
       ${a.perHotel.length===0?`<div class="card"><p style="color:var(--muted)">${t('no_hotels_yet')}</p></div>`:`
       <div class="grid grid-2" style="margin-bottom:16px;">
         <div class="card chart-card">
@@ -2170,7 +2431,10 @@ const STAFF_RENDERERS = {
           ${hotelOptions}
         </select>
       </div>
-      ${searchBar('users-search', t('search_users_ph'), "filterTableRows(this.value,'users-tbody')")}
+      <div class="row" style="gap:10px; align-items:flex-start;">
+        <div style="flex:1;">${searchBar('users-search', t('search_users_ph'), "filterTableRows(this.value,'users-tbody')")}</div>
+        <button class="btn sm secondary" onclick="exportUsersCSV()">${t('export_csv')}</button>
+      </div>
       <div class="dtable-wrap">
         <table class="dtable">
           <thead><tr>
@@ -2201,7 +2465,10 @@ const STAFF_RENDERERS = {
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.audit, t('audit_log_title'), list.length)}
       </div>
-      ${searchBar('audit-search', t('search_audit_ph'), "filterTableRows(this.value,'audit-tbody')")}
+      <div class="row" style="gap:10px; align-items:flex-start;">
+        <div style="flex:1;">${searchBar('audit-search', t('search_audit_ph'), "filterTableRows(this.value,'audit-tbody')")}</div>
+        <button class="btn sm secondary" onclick="exportAuditCSV()">${t('export_csv')}</button>
+      </div>
       <div class="dtable-wrap">
         <table class="dtable">
           <thead><tr>
@@ -2276,7 +2543,145 @@ const STAFF_RENDERERS = {
         </div>`).join('')}
     `;
   },
+  alerts(){
+    const list = ADMIN_ALERTS;
+    const counts = {danger:0, warn:0, info:0};
+    list.forEach(a=>{ if(counts[a.severity]!==undefined) counts[a.severity]++; });
+    const sevIcon = {danger: ICONS_ADMIN.bolt, warn: STAFF_ICONS.alerts, info: ICONS_ADMIN.clockKpi};
+    return `
+      ${pageHead(t('staff_nav_alerts'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      <div class="grid grid-3" style="margin-bottom:20px;">
+        ${kpiCard(ICONS_ADMIN.bolt, t('col_status')+' - '+t('billing_overdue'), counts.danger)}
+        ${kpiCard(STAFF_ICONS.alerts, LANG==='ar'?'تحذيرات':'Warnings', counts.warn)}
+        ${kpiCard(ICONS_ADMIN.clockKpi, LANG==='ar'?'معلومات':'Info', counts.info)}
+      </div>
+      ${list.length===0?`<div class="card"><p style="color:var(--muted)">${t('no_alerts')}</p></div>`:
+      list.map(a=>`
+        <div class="card" style="margin-bottom:10px; display:flex; align-items:flex-start; gap:12px;">
+          <div class="kpi-ic" style="background:${a.severity==='danger'?'rgba(168,73,60,.14)':a.severity==='warn'?'rgba(179,130,44,.14)':'rgba(156,139,107,.14)'}; color:${a.severity==='danger'?'var(--danger)':a.severity==='warn'?'var(--warn)':'var(--accent2)'};">${sevIcon[a.severity]||''}</div>
+          <div style="flex:1;">
+            <div class="row between">
+              <strong>${t('alert_'+a.type)}</strong>
+              <span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${a.severity}</span>
+            </div>
+            <div style="color:var(--muted); font-size:13px; margin-top:4px;">
+              ${a.hotelName ? escapeHtml(a.hotelName) : (LANG==='ar'?'منصّة عامة':'Platform-wide')}
+              ${a.meta && a.meta.count!==undefined ? ' · ' + a.meta.count : ''}
+              ${a.meta && a.meta.avgRating!==undefined ? ' · ' + a.meta.avgRating + ' ★' : ''}
+              ${a.meta && a.meta.billingNextDue ? ' · ' + new Date(a.meta.billingNextDue).toLocaleDateString() : ''}
+            </div>
+          </div>
+          ${a.hotelId ? `<button class="btn sm secondary" onclick="openHotelSettings(${a.hotelId})">${t('hotel_settings')}</button>` : ''}
+        </div>`).join('')}
+    `;
+  },
+  search(){
+    return `
+      ${pageHead(t('staff_nav_search'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${searchBar('admin-global-search-input', t('search_placeholder_global'), 'onAdminGlobalSearchInput(this.value)')}
+      <div id="admin-search-results">${renderAdminSearchResults()}</div>
+    `;
+  },
+  settings(){
+    const s = ADMIN_PLATFORM_SETTINGS;
+    const admins = ADMIN_PLATFORM_ADMINS;
+    const isFull = S.staff.adminScope !== 'readonly';
+    const depts = s ? (s.default_enabled_departments||[]) : ALL_DEPARTMENTS;
+    return `
+      ${pageHead(t('staff_nav_settings'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${!isFull ? `<div class="card" style="margin-bottom:16px; border-color:var(--warn);"><span class="pill warn">${t('readonly_admin_notice')}</span></div>` : ''}
+      ${!s ? `<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>` : `
+      <div class="card" style="margin-bottom:16px;">
+        <strong style="display:block; margin-bottom:12px;">${t('platform_identity_section')}</strong>
+        <div class="grid grid-2">
+          <div class="field"><label>${t('setting_platform_name')}</label><input id="ps-platform-name" value="${escapeHtml(s.platform_name||'ATHWA')}" ${isFull?'':'disabled'}></div>
+          <div class="field"><label>${t('setting_support_email')}</label><input id="ps-support-email" value="${escapeHtml(s.support_email||'')}" ${isFull?'':'disabled'}></div>
+          <div class="field"><label>${t('setting_support_phone')}</label><input id="ps-support-phone" value="${escapeHtml(s.support_phone||'')}" ${isFull?'':'disabled'}></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <strong style="display:block; margin-bottom:12px;">${t('default_departments_section')}</strong>
+        <div class="grid grid-2">
+          ${ALL_DEPARTMENTS.map(d=>`
+            <label class="row" style="gap:6px; font-size:13.5px;">
+              <input type="checkbox" id="ps-dept-${d}" ${depts.includes(d)?'checked':''} ${isFull?'':'disabled'}>
+              <span>${t('nav_'+d)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+      ${isFull ? `<div class="row" style="gap:8px; margin-bottom:20px;"><button class="btn" onclick="submitPlatformSettings(this)">${t('save_changes')}</button></div>` : ''}
+      `}
+      <div class="card">
+        <div class="row between" style="margin-bottom:12px;">
+          <strong>${t('platform_admins_section')}</strong>
+          ${isFull ? `<button class="btn sm" onclick="toggleAddPlatformAdminForm()">${t('add_platform_admin')}</button>` : ''}
+        </div>
+        ${ADMIN_ADD_ADMIN_OPEN ? `
+        <div class="card" style="margin-bottom:14px; background:var(--panel2);">
+          <div class="grid grid-2">
+            <div class="field"><label>${t('new_admin_name')}</label><input id="pa-name"></div>
+            <div class="field"><label>${t('new_admin_email')}</label><input id="pa-email" type="email"></div>
+            <div class="field"><label>${t('new_admin_password')}</label><input id="pa-password" type="password"></div>
+            <div class="field"><label>${t('new_admin_scope')}</label>
+              <select id="pa-scope">
+                <option value="readonly">${t('admin_scope_readonly')}</option>
+                <option value="full">${t('admin_scope_full')}</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="gap:8px; margin-top:6px;">
+            <button class="btn" onclick="submitAddPlatformAdmin(this)">${t('create_hotel_btn')}</button>
+            <button class="btn secondary" onclick="toggleAddPlatformAdminForm()">${t('cancel')}</button>
+          </div>
+        </div>` : ''}
+        <div class="dtable-wrap">
+          <table class="dtable">
+            <thead><tr><th>${t('col_user')}</th><th>${t('col_scope')}</th><th>${t('col_status')}</th><th></th></tr></thead>
+            <tbody>
+              ${admins.length===0?`<tr><td colspan="4" class="dtable-empty">${t('no_data')}</td></tr>`:
+              admins.map(a=>`
+                <tr>
+                  <td><strong>${escapeHtml(a.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(a.email)}</div></td>
+                  <td>${t('admin_scope_'+(a.admin_scope||'full'))}</td>
+                  <td><span class="pill ${a.active?'':'danger'}">${a.active?t('status_active'):t('status_inactive')}</span></td>
+                  <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${a.id}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button>` : ''}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  },
 };
+// Renders just the results panel for the global-search page (kept separate
+// from STAFF_RENDERERS.search so typing can re-render only this fragment
+// without rebuilding the input element and losing cursor focus).
+function renderAdminSearchResults(){
+  if(!ADMIN_SEARCH_RESULTS){
+    return `<p style="color:var(--muted); font-size:13px;">${t('search_type_min_chars')}</p>`;
+  }
+  const r = ADMIN_SEARCH_RESULTS;
+  const total = (r.hotels||[]).length + (r.users||[]).length + (r.guests||[]).length;
+  if(total===0) return `<p style="color:var(--muted); font-size:13px;">${t('no_search_results')}</p>`;
+  let html = '';
+  if(r.hotels && r.hotels.length){
+    html += `<strong style="display:block; margin:10px 0 6px; font-size:13px; color:var(--muted);">${t('search_results_hotels')}</strong><div class="card" style="margin-bottom:10px;">`;
+    html += r.hotels.map(h=>`<div class="list-item"><span><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></span><button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button></div>`).join('');
+    html += `</div>`;
+  }
+  if(r.users && r.users.length){
+    html += `<strong style="display:block; margin:10px 0 6px; font-size:13px; color:var(--muted);">${t('search_results_users')}</strong><div class="card" style="margin-bottom:10px;">`;
+    html += r.users.map(u=>`<div class="list-item"><span><strong>${escapeHtml(u.name)}</strong> <span style="color:var(--muted); font-size:12px;">${escapeHtml(u.email)} · ${escapeHtml(u.hotel_name||'')}</span></span><span class="pill">${roleLabel(u.role)}</span></div>`).join('');
+    html += `</div>`;
+  }
+  if(r.guests && r.guests.length){
+    html += `<strong style="display:block; margin:10px 0 6px; font-size:13px; color:var(--muted);">${t('search_results_guests')}</strong><div class="card">`;
+    html += r.guests.map(g=>`<div class="list-item"><span><strong>${escapeHtml(g.name)}</strong> <span style="color:var(--muted); font-size:12px;">${t('room_label')} ${escapeHtml(g.room_number)} · ${escapeHtml(g.hotel_name||'')}</span></span></div>`).join('');
+    html += `</div>`;
+  }
+  return html;
+}
 
 /* ---------------- Boot ---------------- */
 function boot(){
