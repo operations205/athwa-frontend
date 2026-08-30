@@ -139,6 +139,51 @@ label{font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:6px; 
 }
 .list-item:last-child{border-bottom:none;}
 
+/* ---------- Admin console (super_admin): KPI cards, data tables, search, breadcrumb ---------- */
+.kpi-card{
+  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; display:flex; align-items:flex-start; gap:12px;
+  box-shadow:0 1px 2px rgba(47,42,34,.04), 0 6px 16px rgba(47,42,34,.05);
+}
+.kpi-card .kpi-ic{
+  width:38px; height:38px; min-width:38px; border-radius:10px;
+  background:rgba(156,139,107,.14); display:flex; align-items:center; justify-content:center; color:var(--accent2);
+}
+.kpi-card .kpi-ic svg{width:19px; height:19px;}
+.kpi-card .kpi-label{color:var(--muted); font-size:12px; margin-bottom:4px;}
+.kpi-card .kpi-value{font-size:24px; font-weight:700; line-height:1.1;}
+
+.breadcrumb{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); margin-bottom:10px; flex-wrap:wrap;}
+.breadcrumb a, .breadcrumb span.bc-link{color:var(--accent2); cursor:pointer; font-weight:600;}
+.breadcrumb a:hover, .breadcrumb span.bc-link:hover{text-decoration:underline;}
+.breadcrumb .bc-sep{opacity:.6;}
+
+.search-bar{position:relative; margin-bottom:12px;}
+.search-bar input{padding-inline-start:36px;}
+.search-bar .search-ic{position:absolute; inset-inline-start:11px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;}
+.search-bar .search-ic svg{width:16px; height:16px; display:block;}
+
+.dtable-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); background:var(--panel);}
+table.dtable{width:100%; border-collapse:collapse; font-size:13.5px; white-space:nowrap;}
+table.dtable thead th{
+  position:sticky; top:0; background:var(--panel2); color:var(--muted); font-weight:700;
+  text-align:start; padding:10px 14px; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em;
+  border-bottom:1px solid var(--border);
+}
+table.dtable tbody td{padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle;}
+table.dtable tbody tr:last-child td{border-bottom:none;}
+table.dtable tbody tr:hover{background:var(--panel2);}
+table.dtable td.num{font-variant-numeric:tabular-nums;}
+table.dtable td.actions{white-space:nowrap;}
+.dtable-empty{padding:24px; text-align:center; color:var(--muted);}
+
+.chart-card .chart-row{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+.chart-card .chart-row:last-child{margin-bottom:0;}
+.chart-card .chart-label{width:110px; min-width:110px; font-size:12.5px; color:var(--muted);}
+.chart-card .chart-track{flex:1; background:var(--panel2); border-radius:8px; height:16px; overflow:hidden;}
+.chart-card .chart-fill{height:100%; border-radius:8px;}
+.chart-card .chart-value{width:40px; min-width:40px; text-align:end; font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;}
+
 .toast-wrap{position:fixed; bottom:20px; inset-inline-end:20px; z-index:999; display:flex; flex-direction:column; gap:10px;}
 .toast{
   background:var(--panel); border:1px solid var(--accent); color:var(--text); padding:12px 16px;
@@ -637,6 +682,8 @@ const DICT = {
     platform_users_title:"مستخدمو المنصة", filter_all_hotels:"كل الفنادق", col_hotel:"الفندق", no_users_yet:"لا يوجد مستخدمون",
     confirm_deactivate_user:"هل تريد تعطيل حساب هذا المستخدم؟", confirm_activate_user:"هل تريد تفعيل حساب هذا المستخدم؟",
     audit_log_title:"سجل التدقيق", no_audit_yet:"لا يوجد سجل بعد", col_actor:"المستخدم", col_action:"الإجراء", col_time:"الوقت",
+    col_status:"الحالة", col_departments:"الأقسام", col_user:"المستخدم", col_role:"الصلاحية", col_target:"الهدف", col_when:"الوقت",
+    search_hotels_ph:"ابحث عن فندق...", search_users_ph:"ابحث عن مستخدم...", search_audit_ph:"ابحث في السجل...",
     username:"البريد الإلكتروني", password:"كلمة المرور", select_department:"اختر القسم",
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
@@ -726,6 +773,8 @@ const DICT = {
     active_guests_kpi:"Active Guests", avg_rating_kpi:"Avg. Rating", active_staff_kpi:"Active Staff",
     per_hotel_breakdown:"Per-Hotel Breakdown",
     platform_users_title:"Platform Users", filter_all_hotels:"All Hotels", col_hotel:"Hotel", no_users_yet:"No users yet",
+    col_status:"Status", col_departments:"Departments", col_user:"User", col_role:"Role", col_target:"Target", col_when:"When",
+    search_hotels_ph:"Search hotels...", search_users_ph:"Search users...", search_audit_ph:"Search audit log...",
     confirm_deactivate_user:"Deactivate this user's account?", confirm_activate_user:"Activate this user's account?",
     audit_log_title:"Audit Log", no_audit_yet:"No audit entries yet", col_actor:"Actor", col_action:"Action", col_time:"Time",
     username:"Email", password:"Password", select_department:"Select department",
@@ -1845,6 +1894,50 @@ async function advanceStatus(id){
   }
 }
 
+/* ---------------- Admin console helpers (KPI cards, breadcrumb, data tables) ---------------- */
+const ICONS_ADMIN = {
+  building:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 7h1M15 7h1M8 11h1M15 11h1M8 15h1M15 15h1M10 21v-4h4v4"/></svg>',
+  power:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v8"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>',
+  bolt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>',
+  clockKpi:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>',
+  star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.2L12 16.8 6.4 20l1.4-6.2-4.8-4.3 6.4-.6L12 3Z"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  guests:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>',
+};
+function kpiCard(icon, label, value){
+  return `<div class="kpi-card"><div class="kpi-ic">${icon}</div><div><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div></div></div>`;
+}
+function breadcrumb(items){
+  // items: [{label, onclick?}] - last item is the current (non-clickable) page
+  return `<div class="breadcrumb">${items.map((it,i)=>{
+    const sep = i>0 ? '<span class="bc-sep">/</span>' : '';
+    const node = it.onclick ? `<span class="bc-link" onclick="${it.onclick}">${it.label}</span>` : `<span>${it.label}</span>`;
+    return sep+node;
+  }).join('')}</div>`;
+}
+function searchBar(id, placeholder, oninput){
+  return `<div class="search-bar"><span class="search-ic">${ICONS_ADMIN.search}</span><input id="${id}" placeholder="${placeholder}" oninput="${oninput}"></div>`;
+}
+// Generic client-side table-row filter: hides <tr data-search="..."> rows that
+// don't contain the query (case-insensitive). Used by every admin data table.
+function filterTableRows(inputVal, tbodyId){
+  const q = (inputVal||'').trim().toLowerCase();
+  const tbody = document.getElementById(tbodyId);
+  if(!tbody) return;
+  let anyVisible = false;
+  Array.from(tbody.querySelectorAll('tr[data-search]')).forEach(tr=>{
+    const match = !q || tr.getAttribute('data-search').includes(q);
+    tr.style.display = match ? '' : 'none';
+    if(match) anyVisible = true;
+  });
+  const emptyRow = tbody.querySelector('tr[data-empty]');
+  if(emptyRow) emptyRow.style.display = anyVisible ? 'none' : '';
+}
+function chartBar(label, value, max, colorVar){
+  const pct = max>0 ? Math.max(2, Math.round((value/max)*100)) : 0;
+  return `<div class="chart-row"><div class="chart-label">${label}</div><div class="chart-track"><div class="chart-fill" style="width:${pct}%; background:var(${colorVar});"></div></div><div class="chart-value">${value}</div></div>`;
+}
+
 /* ---------------- Staff renderers ---------------- */
 const STAFF_RENDERERS = {
   overview(){
@@ -1878,14 +1971,37 @@ const STAFF_RENDERERS = {
     const list = ADMIN_HOTELS;
     const activeCount = list.filter(h=>h.active && !h.archived_at).length;
     const inactiveCount = list.filter(h=>!h.active && !h.archived_at).length;
+    const rows = list.map(h=>{
+      const isArchived = !!h.archived_at;
+      const searchKey = (h.name+' '+h.slug).toLowerCase();
+      const deptCount = (h.enabled_departments||[]).length;
+      return `
+        <tr data-search="${escapeHtml(searchKey)}">
+          <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
+          <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
+          <td class="num">${deptCount}/${ALL_DEPARTMENTS.length}</td>
+          <td>${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</td>
+          <td class="actions">
+            <div class="row" style="gap:6px; justify-content:flex-end;">
+              ${isArchived ? `
+                <button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>
+              ` : `
+                <button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button>
+                <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+                <button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>
+              `}
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
     return `
       ${pageHead(t('staff_nav_hotels'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('total_hotels')}</div><div style="font-size:26px; font-weight:700;">${list.length}</div></div>
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('active_hotels')}</div><div style="font-size:26px; font-weight:700;">${activeCount}</div></div>
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('inactive_hotels')}</div><div style="font-size:26px; font-weight:700;">${inactiveCount}</div></div>
+        ${kpiCard(ICONS_ADMIN.building, t('total_hotels'), list.length)}
+        ${kpiCard(STAFF_ICONS.hotels, t('active_hotels'), activeCount)}
+        ${kpiCard(ICONS_ADMIN.power, t('inactive_hotels'), inactiveCount)}
       </div>
-      <div class="row between" style="margin-bottom:14px;">
+      <div class="row between" style="margin-bottom:14px; gap:10px; flex-wrap:wrap;">
         <strong>${t('platform_overview')}</strong>
         <div class="row" style="gap:8px;">
           <button class="btn sm secondary" onclick="toggleShowArchivedHotels()">${ADMIN_HOTELS_SHOW_ARCHIVED ? t('hide_archived') : t('show_archived')}</button>
@@ -1905,28 +2021,17 @@ const STAFF_RENDERERS = {
           <button class="btn secondary" onclick="toggleCreateHotelForm()">${t('cancel')}</button>
         </div>
       </div>
-      <div class="card">
-        ${list.length===0?`<p style="color:var(--muted)">${t('no_hotels_yet')}</p>`:
-        list.map(h=>{
-          const isArchived = !!h.archived_at;
-          return `
-          <div class="list-item">
-            <div>
-              <div><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('created_label')}: ${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</div>
-            </div>
-            <div class="row" style="gap:6px;">
-              <span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span>
-              ${isArchived ? `
-                <button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>
-              ` : `
-                <button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button>
-                <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
-                <button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>
-              `}
-            </div>
-          </div>`;
-        }).join('')}
+      ${searchBar('hotels-search', t('search_hotels_ph'), "filterTableRows(this.value,'hotels-tbody')")}
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr>
+            <th>${t('col_hotel')}</th><th>${t('col_status')}</th><th>${t('col_departments')}</th><th>${t('created_label')}</th><th></th>
+          </tr></thead>
+          <tbody id="hotels-tbody">
+            ${rows}
+            <tr data-empty style="display:${list.length?'none':''}"><td colspan="5" class="dtable-empty">${t('no_hotels_yet')}</td></tr>
+          </tbody>
+        </table>
       </div>
     `;
   },
@@ -1938,9 +2043,10 @@ const STAFF_RENDERERS = {
     }
     const enabled = h.enabled_departments || [];
     return `
-      <div class="row" style="margin-bottom:6px;">
-        <button class="btn sm secondary" onclick="closeHotelSettings()">← ${t('back_to_hotels')}</button>
-      </div>
+      ${breadcrumb([
+        {label: t('staff_nav_hotels'), onclick:'closeHotelSettings()'},
+        {label: escapeHtml(h.name)},
+      ])}
       ${pageHead(t('hotel_settings'), escapeHtml(h.name) + ' · ' + escapeHtml(h.slug))}
 
       <div class="card" style="margin-bottom:16px;">
@@ -1988,74 +2094,124 @@ const STAFF_RENDERERS = {
     if(!a){
       return `${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
     }
+    const maxGuests = Math.max(1, ...a.perHotel.map(h=>h.active_guests||0));
+    const maxReq = Math.max(1, ...a.perHotel.map(h=>h.open_requests||0));
     return `
       ${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:14px;">
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('total_hotels')}</div><div style="font-size:26px; font-weight:700;">${a.hotels.not_archived}</div></div>
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('active_hotels')}</div><div style="font-size:26px; font-weight:700;">${a.hotels.active}</div></div>
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('active_guests_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.guests.active_stays}</div></div>
+        ${kpiCard(STAFF_ICONS.hotels, t('total_hotels'), a.hotels.not_archived)}
+        ${kpiCard(ICONS_ADMIN.building, t('active_hotels'), a.hotels.active)}
+        ${kpiCard(ICONS_ADMIN.guests, t('active_guests_kpi'), a.guests.active_stays)}
       </div>
       <div class="grid grid-3" style="margin-bottom:20px;">
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('open_requests_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.requests.pending + a.requests.in_progress}</div></div>
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('requests_24h_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.requests.last_24h}</div></div>
-        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('avg_rating_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.feedback.avg_rating ?? '-'}</div></div>
+        ${kpiCard(ICONS_ADMIN.bolt, t('open_requests_kpi'), a.requests.pending + a.requests.in_progress)}
+        ${kpiCard(ICONS_ADMIN.clockKpi, t('requests_24h_kpi'), a.requests.last_24h)}
+        ${kpiCard(ICONS_ADMIN.star, t('avg_rating_kpi'), a.feedback.avg_rating ?? '-')}
       </div>
       <div class="row between" style="margin-bottom:14px;"><strong>${t('per_hotel_breakdown')}</strong></div>
-      <div class="card">
-        ${a.perHotel.length===0?`<p style="color:var(--muted)">${t('no_hotels_yet')}</p>`:
-        a.perHotel.map(h=>`
-          <div class="list-item">
-            <div>
-              <div><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('active_guests_kpi')}: ${h.active_guests} · ${t('open_requests_kpi')}: ${h.open_requests} · ${t('avg_rating_kpi')}: ${h.avg_rating ?? '-'} · ${t('active_staff_kpi')}: ${h.staff_count}</div>
-            </div>
-            <span class="pill ${h.active?'':'danger'}">${h.active?t('status_active'):t('status_inactive')}</span>
-          </div>`).join('')}
+      ${a.perHotel.length===0?`<div class="card"><p style="color:var(--muted)">${t('no_hotels_yet')}</p></div>`:`
+      <div class="grid grid-2" style="margin-bottom:16px;">
+        <div class="card chart-card">
+          <strong style="display:block; margin-bottom:12px; font-size:13px; color:var(--muted);">${t('active_guests_kpi')}</strong>
+          ${a.perHotel.map(h=>chartBar(escapeHtml(h.name), h.active_guests||0, maxGuests, '--accent2')).join('')}
+        </div>
+        <div class="card chart-card">
+          <strong style="display:block; margin-bottom:12px; font-size:13px; color:var(--muted);">${t('open_requests_kpi')}</strong>
+          ${a.perHotel.map(h=>chartBar(escapeHtml(h.name), h.open_requests||0, maxReq, '--warn')).join('')}
+        </div>
       </div>
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr>
+            <th>${t('col_hotel')}</th><th>${t('col_status')}</th><th>${t('active_guests_kpi')}</th><th>${t('open_requests_kpi')}</th><th>${t('avg_rating_kpi')}</th><th>${t('active_staff_kpi')}</th>
+          </tr></thead>
+          <tbody>
+            ${a.perHotel.map(h=>`
+              <tr>
+                <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
+                <td><span class="pill ${h.active?'':'danger'}">${h.active?t('status_active'):t('status_inactive')}</span></td>
+                <td class="num">${h.active_guests}</td>
+                <td class="num">${h.open_requests}</td>
+                <td class="num">${h.avg_rating ?? '-'}</td>
+                <td class="num">${h.staff_count}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`}
     `;
   },
   users(){
     const filter = ADMIN_USERS_HOTEL_FILTER;
     const list = filter==='all' ? ADMIN_USERS : ADMIN_USERS.filter(u=>String(u.hotel_id)===String(filter));
     const hotelOptions = ADMIN_HOTELS.map(h=>`<option value="${h.id}" ${String(filter)===String(h.id)?'selected':''}>${escapeHtml(h.name)}</option>`).join('');
+    const activeCount = list.filter(u=>u.active).length;
+    const rows = list.map(u=>{
+      const searchKey = (u.name+' '+u.email+' '+(u.hotel_name||'')).toLowerCase();
+      return `
+        <tr data-search="${escapeHtml(searchKey)}">
+          <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
+          <td>${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''}</td>
+          <td>${escapeHtml(u.hotel_name||'-')}</td>
+          <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
+          <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
+        </tr>`;
+    }).join('');
     return `
       ${pageHead(t('platform_users_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
-      <div class="row between" style="margin-bottom:14px;">
+      <div class="grid grid-3" style="margin-bottom:20px;">
+        ${kpiCard(STAFF_ICONS.users, t('platform_users_title'), list.length)}
+        ${kpiCard(ICONS_ADMIN.power, t('active_hotels'), activeCount)}
+        ${kpiCard(STAFF_ICONS.hotels, t('total_hotels'), ADMIN_HOTELS.length)}
+      </div>
+      <div class="row between" style="margin-bottom:14px; gap:10px; flex-wrap:wrap;">
         <strong>${t('platform_users_title')}</strong>
         <select id="admin-users-hotel-filter" onchange="setAdminUsersHotelFilter(this.value)">
           <option value="all" ${filter==='all'?'selected':''}>${t('filter_all_hotels')}</option>
           ${hotelOptions}
         </select>
       </div>
-      <div class="card">
-        ${list.length===0?`<p style="color:var(--muted)">${t('no_users_yet')}</p>`:
-        list.map(u=>`
-          <div class="list-item">
-            <div>
-              <div><strong>${escapeHtml(u.name)}</strong> <span style="color:var(--muted); font-size:12px;">${escapeHtml(u.email)}</span></div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''} · ${t('col_hotel')}: ${escapeHtml(u.hotel_name)}</div>
-            </div>
-            <div class="row" style="gap:6px;">
-              <span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span>
-              <button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button>
-            </div>
-          </div>`).join('')}
+      ${searchBar('users-search', t('search_users_ph'), "filterTableRows(this.value,'users-tbody')")}
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr>
+            <th>${t('col_user')}</th><th>${t('col_role')}</th><th>${t('col_hotel')}</th><th>${t('col_status')}</th><th></th>
+          </tr></thead>
+          <tbody id="users-tbody">
+            ${rows}
+            <tr data-empty style="display:${list.length?'none':''}"><td colspan="5" class="dtable-empty">${t('no_users_yet')}</td></tr>
+          </tbody>
+        </table>
       </div>
     `;
   },
   audit(){
     const list = ADMIN_AUDIT_LOG;
+    const rows = list.map(e=>{
+      const searchKey = (e.action+' '+(e.actor_name||e.actor_type)+' '+(e.target_type||'')).toLowerCase();
+      return `
+        <tr data-search="${escapeHtml(searchKey)}">
+          <td><strong>${escapeHtml(e.action)}</strong></td>
+          <td>${escapeHtml(e.actor_name||e.actor_type)}</td>
+          <td>${e.target_type?escapeHtml(e.target_type)+(e.target_id?' #'+e.target_id:''):'-'}</td>
+          <td>${e.created_at ? new Date(e.created_at).toLocaleString() : '-'}</td>
+        </tr>`;
+    }).join('');
     return `
       ${pageHead(t('audit_log_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
-      <div class="card">
-        ${list.length===0?`<p style="color:var(--muted)">${t('no_audit_yet')}</p>`:
-        list.map(e=>`
-          <div class="list-item">
-            <div>
-              <div><strong>${escapeHtml(e.action)}</strong> <span style="color:var(--muted); font-size:12px;">${escapeHtml(e.actor_name||e.actor_type)}</span></div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${e.created_at ? new Date(e.created_at).toLocaleString() : '-'}${e.target_type?' · '+escapeHtml(e.target_type)+(e.target_id?' #'+e.target_id:''):''}</div>
-            </div>
-          </div>`).join('')}
+      <div class="grid grid-3" style="margin-bottom:20px;">
+        ${kpiCard(STAFF_ICONS.audit, t('audit_log_title'), list.length)}
+      </div>
+      ${searchBar('audit-search', t('search_audit_ph'), "filterTableRows(this.value,'audit-tbody')")}
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr>
+            <th>${t('col_action')}</th><th>${t('col_actor')}</th><th>${t('col_target')}</th><th>${t('col_when')}</th>
+          </tr></thead>
+          <tbody id="audit-tbody">
+            ${rows}
+            <tr data-empty style="display:${list.length?'none':''}"><td colspan="4" class="dtable-empty">${t('no_audit_yet')}</td></tr>
+          </tbody>
+        </table>
       </div>
     `;
   },
