@@ -330,9 +330,63 @@ function mapBackendPrearrival(p){
 }
 const CACHE = { requests:[], feedback:[], prearrivals:[] };
 let REFRESH_TIMER = null;
+let ADMIN_HOTELS = [];
+async function refreshAdminHotels(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    const list = await apiCall('/api/admin/hotels', {token});
+    ADMIN_HOTELS = list || [];
+    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+  }catch(e){ /* silent: keep last known list on transient network errors */ }
+}
+function toggleCreateHotelForm(){
+  const panel = document.getElementById('create-hotel-panel');
+  if(panel) panel.style.display = (panel.style.display==='none' || !panel.style.display) ? 'block' : 'none';
+}
+async function submitCreateHotel(btn){
+  const name = document.getElementById('nh-name').value.trim();
+  const slug = document.getElementById('nh-slug').value.trim().toLowerCase();
+  const ownerName = document.getElementById('nh-owner-name').value.trim();
+  const ownerEmail = document.getElementById('nh-owner-email').value.trim();
+  const ownerPassword = document.getElementById('nh-owner-pass').value;
+  if(!name || !slug || !ownerName || !ownerEmail || !ownerPassword){
+    toast(LANG==='ar'?'من فضلك أكمل كل الحقول':'Please fill in all fields'); return;
+  }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/hotels', {method:'POST', token, body:{slug, name, ownerName, ownerEmail, ownerPassword}});
+    toast(t('hotel_created_ok'));
+    document.getElementById('nh-name').value=''; document.getElementById('nh-slug').value='';
+    document.getElementById('nh-owner-name').value=''; document.getElementById('nh-owner-email').value=''; document.getElementById('nh-owner-pass').value='';
+    toggleCreateHotelForm();
+    await refreshAdminHotels();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشل إنشاء الفندق':'Failed to create hotel'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+async function toggleHotelActive(id, currentActive){
+  const msg = currentActive ? t('confirm_deactivate_hotel') : t('confirm_activate_hotel');
+  if(!confirm(msg)) return;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body:{active: !currentActive}});
+    await refreshAdminHotels();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
 async function refreshOpsData(){
   try{
-    if(S.staff.loggedIn && getStaffToken()){
+    // super_admin has no hotel scope - it manages hotels platform-wide, not
+    // a single hotel's requests/feedback/prearrivals (those endpoints are
+    // 403'd for this role server-side), so poll the hotels list instead.
+    if(S.staff.loggedIn && getStaffToken() && S.staff.role==='super_admin'){
+      await refreshAdminHotels();
+    } else if(S.staff.loggedIn && getStaffToken()){
       const token = getStaffToken();
       const [reqs, fb, pre] = await Promise.all([
         apiCall('/api/requests', {token}),
@@ -415,7 +469,18 @@ const DICT = {
     portal_owner:"مالك الفندق", portal_owner_desc:"نظرة عامة على الأداء",
     portal_manager:"مدير الفندق", portal_manager_desc:"إدارة العمليات اليومية",
     portal_dept:"مدير قسم", portal_dept_desc:"متابعة طلبات قسمك",
-    role_owner:"مالك الفندق", role_manager:"مدير الفندق", role_dept:"مدير قسم",
+    role_owner:"مالك الفندق", role_manager:"مدير الفندق", role_dept:"مدير قسم", role_super_admin:"مسؤول المنصة",
+    staff_nav_hotels:"إدارة الفنادق",
+    platform_admin_login:"دخول كمسؤول المنصة", admin_email:"البريد الإلكتروني", back_to_login:"رجوع لتسجيل الدخول العادي",
+    platform_overview:"نظرة عامة على المنصة",
+    total_hotels:"إجمالي الفنادق", active_hotels:"فنادق نشطة", inactive_hotels:"فنادق معطّلة",
+    add_hotel:"إضافة فندق جديد", hotel_slug:"المعرّف (slug)", hotel_display_name:"اسم الفندق",
+    owner_name:"اسم المالك", owner_email:"بريد المالك الإلكتروني", owner_password:"كلمة مرور المالك",
+    create_hotel_btn:"إنشاء الفندق", cancel:"إلغاء",
+    status_active:"نشط", status_inactive:"معطّل", activate:"تفعيل", deactivate:"تعطيل",
+    no_hotels_yet:"لا توجد فنادق بعد", hotel_created_ok:"تم إنشاء الفندق بنجاح",
+    confirm_deactivate_hotel:"هل تريد تعطيل هذا الفندق؟ لن يتمكن نزلاؤه وموظفوه من الدخول.",
+    confirm_activate_hotel:"هل تريد تفعيل هذا الفندق؟", created_label:"تاريخ الإنشاء",
     username:"البريد الإلكتروني", password:"كلمة المرور", select_department:"اختر القسم",
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
@@ -475,7 +540,18 @@ const DICT = {
     portal_owner:"Hotel Owner", portal_owner_desc:"Performance overview",
     portal_manager:"Hotel Manager", portal_manager_desc:"Manage daily operations",
     portal_dept:"Department Manager", portal_dept_desc:"Track your department's requests",
-    role_owner:"Hotel Owner", role_manager:"Hotel Manager", role_dept:"Department Manager",
+    role_owner:"Hotel Owner", role_manager:"Hotel Manager", role_dept:"Department Manager", role_super_admin:"Platform Admin",
+    staff_nav_hotels:"Manage Hotels",
+    platform_admin_login:"Platform Admin Login", admin_email:"Email", back_to_login:"Back to regular login",
+    platform_overview:"Platform Overview",
+    total_hotels:"Total Hotels", active_hotels:"Active Hotels", inactive_hotels:"Inactive Hotels",
+    add_hotel:"Add New Hotel", hotel_slug:"Slug", hotel_display_name:"Hotel Name",
+    owner_name:"Owner Name", owner_email:"Owner Email", owner_password:"Owner Password",
+    create_hotel_btn:"Create Hotel", cancel:"Cancel",
+    status_active:"Active", status_inactive:"Inactive", activate:"Activate", deactivate:"Deactivate",
+    no_hotels_yet:"No hotels yet", hotel_created_ok:"Hotel created successfully",
+    confirm_deactivate_hotel:"Deactivate this hotel? Its guests and staff will be locked out.",
+    confirm_activate_hotel:"Activate this hotel?", created_label:"Created",
     username:"Email", password:"Password", select_department:"Select department",
     back:"Back", demo_hint:"Demo mode — any login details work",
     staff_nav_overview:"Overview", staff_nav_requests:"All Requests",
@@ -599,7 +675,7 @@ async function unifiedLogin(btn){
     document.getElementById('staff-app').classList.add('active');
     updateStaffRoleLabel();
     buildStaffNav();
-    staffNav(frontRole==='dept' ? 'requests' : 'overview');
+    staffNav(defaultStaffPage(frontRole));
     startLivePolling();
   }
 }
@@ -1381,7 +1457,52 @@ function renderLogin(){
       <input type="password" id="login-pass" placeholder="•••••">
     </div>
     <button class="btn full" onclick="unifiedLogin(this)">${t('login_btn')}</button>
+    <button class="btn ghost full" style="margin-top:10px;" onclick="renderAdminLogin()">${t('platform_admin_login')}</button>
   `;
+}
+function renderAdminLogin(){
+  const card = document.getElementById('login-card');
+  if(!card) return;
+  card.style.maxWidth = '380px';
+  card.innerHTML = `
+    <div class="login-logo"><img src="${LOGO_DATA_URI}" alt="ATHWA"></div>
+    <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('platform_admin_login')}</h2>
+    <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">ATHWA</p>
+    <div class="field" style="text-align:start;">
+      <label>${t('admin_email')}</label>
+      <input id="admin-login-email" type="email" placeholder="admin@example.com">
+    </div>
+    <div class="field" style="text-align:start;">
+      <label>${t('password')}</label>
+      <input type="password" id="admin-login-pass" placeholder="•••••">
+    </div>
+    <button class="btn full" onclick="adminLogin(this)">${t('login_btn')}</button>
+    <button class="btn ghost full" style="margin-top:10px;" onclick="renderLogin()">${t('back_to_login')}</button>
+  `;
+}
+async function adminLogin(btn){
+  const email = document.getElementById('admin-login-email').value.trim();
+  const password = document.getElementById('admin-login-pass').value.trim();
+  if(!email || !password){ toast(LANG==='ar'?'من فضلك أدخل بيانات الدخول':'Please enter your login details'); return; }
+  const origText = btn ? btn.textContent : null;
+  if(btn){ btn.disabled = true; btn.textContent = LANG==='ar' ? 'جارٍ الدخول...' : 'Signing in...'; }
+  let res;
+  try{
+    res = await apiCall('/api/auth/admin-login', {method:'POST', body:{email, password}});
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشل تسجيل الدخول':'Login failed'));
+    if(btn){ btn.disabled = false; btn.textContent = origText; }
+    return;
+  }
+  setStaffToken(res.token);
+  S.staff = {loggedIn:true, role:'super_admin', dept:null, name:res.user.name};
+  saveState();
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('staff-app').classList.add('active');
+  updateStaffRoleLabel();
+  buildStaffNav();
+  staffNav('hotels');
+  startLivePolling();
 }
 function staffLogout(){
   S.staff = {loggedIn:false, role:null, dept:null, name:''};
@@ -1403,12 +1524,19 @@ const STAFF_ICONS = {
   requests:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v2h6V3M8 10h8M8 14h8M8 18h5"/></svg>',
   prearrivals: ICONS.prearrival,
   feedback: ICONS.feedback,
+  hotels:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h6"/></svg>',
 };
 const STAFF_NAV_BY_ROLE = {
   owner:['overview','requests','prearrivals','feedback'],
   manager:['overview','requests','prearrivals','feedback'],
   dept:['requests'],
+  super_admin:['hotels'],
 };
+function defaultStaffPage(role){
+  if(role==='dept') return 'requests';
+  if(role==='super_admin') return 'hotels';
+  return 'overview';
+}
 let STAFF_CURRENT = 'overview';
 function buildStaffNav(){
   const items = STAFF_NAV_BY_ROLE[S.staff.role] || [];
@@ -1536,6 +1664,50 @@ const STAFF_RENDERERS = {
       </div>
     `;
   },
+  hotels(){
+    const list = ADMIN_HOTELS;
+    const activeCount = list.filter(h=>h.active).length;
+    const inactiveCount = list.length - activeCount;
+    return `
+      ${pageHead(t('staff_nav_hotels'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      <div class="grid grid-3" style="margin-bottom:20px;">
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('total_hotels')}</div><div style="font-size:26px; font-weight:700;">${list.length}</div></div>
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('active_hotels')}</div><div style="font-size:26px; font-weight:700;">${activeCount}</div></div>
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('inactive_hotels')}</div><div style="font-size:26px; font-weight:700;">${inactiveCount}</div></div>
+      </div>
+      <div class="row between" style="margin-bottom:14px;">
+        <strong>${t('platform_overview')}</strong>
+        <button class="btn sm" onclick="toggleCreateHotelForm()">+ ${t('add_hotel')}</button>
+      </div>
+      <div id="create-hotel-panel" class="card" style="display:none; margin-bottom:16px;">
+        <div class="grid grid-2">
+          <div class="field"><label>${t('hotel_display_name')}</label><input id="nh-name" placeholder="Zahret Al-Sharq Hotel"></div>
+          <div class="field"><label>${t('hotel_slug')}</label><input id="nh-slug" placeholder="zahret-alsharq"></div>
+          <div class="field"><label>${t('owner_name')}</label><input id="nh-owner-name"></div>
+          <div class="field"><label>${t('owner_email')}</label><input id="nh-owner-email" type="email"></div>
+          <div class="field"><label>${t('owner_password')}</label><input id="nh-owner-pass" type="password"></div>
+        </div>
+        <div class="row" style="gap:8px; margin-top:6px;">
+          <button class="btn" onclick="submitCreateHotel(this)">${t('create_hotel_btn')}</button>
+          <button class="btn secondary" onclick="toggleCreateHotelForm()">${t('cancel')}</button>
+        </div>
+      </div>
+      <div class="card">
+        ${list.length===0?`<p style="color:var(--muted)">${t('no_hotels_yet')}</p>`:
+        list.map(h=>`
+          <div class="list-item">
+            <div>
+              <div><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('created_label')}: ${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</div>
+            </div>
+            <div class="row" style="gap:6px;">
+              <span class="pill ${h.active?'':'danger'}">${h.active?t('status_active'):t('status_inactive')}</span>
+              <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    `;
+  },
   requests(){
     const isDept = S.staff.role==='dept';
     let all = getAllOpsRequests();
@@ -1618,7 +1790,7 @@ function boot(){
   }
   applyLang();
   if(S.loggedIn && guestShell){ buildNav(); nav(S.preArrival.submitted ? 'dashboard' : 'prearrival'); startLivePolling(); }
-  if(S.staff.loggedIn && staffShell){ updateStaffRoleLabel(); buildStaffNav(); staffNav(S.staff.role==='dept' ? 'requests' : 'overview'); startLivePolling(); }
+  if(S.staff.loggedIn && staffShell){ updateStaffRoleLabel(); buildStaffNav(); staffNav(defaultStaffPage(S.staff.role)); startLivePolling(); }
 
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
