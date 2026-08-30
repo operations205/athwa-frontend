@@ -332,11 +332,25 @@ const CACHE = { requests:[], feedback:[], prearrivals:[] };
 let REFRESH_TIMER = null;
 let ADMIN_HOTELS = [];
 let ADMIN_HOTELS_SHOW_ARCHIVED = false;
-let ADMIN_EDIT_HOTEL_ID = null;
+let ADMIN_SETTINGS_HOTEL_ID = null;
+let ADMIN_CREATE_HOTEL_OPEN = false;
 let ADMIN_ANALYTICS = null;
 let ADMIN_USERS = [];
 let ADMIN_USERS_HOTEL_FILTER = 'all';
 let ADMIN_AUDIT_LOG = [];
+// True while the super_admin has an open, in-progress form (creating a hotel
+// on the list page, or the dedicated per-hotel settings page). The 6s
+// background poll (refreshOpsData -> refreshAdminHotels) used to call
+// staffRender() unconditionally, which re-renders the ENTIRE current page
+// from scratch - wiping out whatever the user had just typed/checked (and,
+// for the create-hotel panel, silently closing it) every ~6 seconds.
+// Skipping the re-render while a form is open leaves the live DOM (and the
+// user's in-progress input) untouched; the underlying ADMIN_HOTELS data
+// still refreshes in the background, and the screen catches up the moment
+// the form is closed or submitted.
+function adminHotelsFormOpen(){
+  return ADMIN_CREATE_HOTEL_OPEN || STAFF_CURRENT === 'hotel-settings';
+}
 async function refreshAdminHotels(){
   try{
     const token = getStaffToken();
@@ -344,7 +358,7 @@ async function refreshAdminHotels(){
     const qs = ADMIN_HOTELS_SHOW_ARCHIVED ? '?includeArchived=true' : '';
     const list = await apiCall('/api/admin/hotels'+qs, {token});
     ADMIN_HOTELS = list || [];
-    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+    if(S.staff.loggedIn && S.staff.role==='super_admin' && !adminHotelsFormOpen()) staffRender();
   }catch(e){ /* silent: keep last known list on transient network errors */ }
 }
 function toggleShowArchivedHotels(){
@@ -352,8 +366,8 @@ function toggleShowArchivedHotels(){
   refreshAdminHotels();
 }
 function toggleCreateHotelForm(){
-  const panel = document.getElementById('create-hotel-panel');
-  if(panel) panel.style.display = (panel.style.display==='none' || !panel.style.display) ? 'block' : 'none';
+  ADMIN_CREATE_HOTEL_OPEN = !ADMIN_CREATE_HOTEL_OPEN;
+  staffRender();
 }
 async function submitCreateHotel(btn){
   const name = document.getElementById('nh-name').value.trim();
@@ -390,24 +404,47 @@ async function toggleHotelActive(id, currentActive){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }
 }
-function toggleEditHotelPanel(id){
-  ADMIN_EDIT_HOTEL_ID = (ADMIN_EDIT_HOTEL_ID===id) ? null : id;
+// Opens the dedicated full-page settings view for one hotel (not a small
+// popup - a real page with its own back button, reached by clicking into a
+// hotel from the list). ADMIN_HOTELS must already contain this hotel's row.
+function openHotelSettings(id){
+  ADMIN_SETTINGS_HOTEL_ID = id;
+  STAFF_CURRENT = 'hotel-settings';
+  buildStaffNav();
   staffRender();
+  const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
 }
-async function submitEditHotel(id, btn){
-  const nameEl = document.getElementById('eh-name-'+id);
-  const name = nameEl ? nameEl.value.trim() : '';
+function closeHotelSettings(){
+  ADMIN_SETTINGS_HOTEL_ID = null;
+  staffNav('hotels');
+}
+async function submitHotelSettings(id, btn){
+  const val = (elId) => { const el = document.getElementById(elId); return el ? el.value.trim() : ''; };
+  const name = val('hs-name');
   if(!name){ toast(LANG==='ar'?'اسم الفندق مطلوب':'Hotel name is required'); return; }
   const enabledDepartments = ALL_DEPARTMENTS.filter(d=>{
-    const el = document.getElementById('eh-dept-'+id+'-'+d);
+    const el = document.getElementById('hs-dept-'+d);
     return el && el.checked;
   });
+  const conciergeEl = document.getElementById('hs-concierge-enabled');
+  const conciergeEnabled = !!(conciergeEl && conciergeEl.checked);
+  const body = {
+    name,
+    enabledDepartments,
+    conciergeEnabled,
+    currency: val('hs-currency') || undefined,
+    timezone: val('hs-timezone') || undefined,
+    checkinTime: val('hs-checkin') || undefined,
+    checkoutTime: val('hs-checkout') || undefined,
+    contactPhone: val('hs-phone'),
+    contactWhatsapp: val('hs-whatsapp'),
+    logoUrl: val('hs-logo'),
+  };
   const origText = btn.textContent; btn.disabled = true;
   try{
     const token = getStaffToken();
-    await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body:{name, enabledDepartments}});
+    await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body});
     toast(t('hotel_updated_ok'));
-    ADMIN_EDIT_HOTEL_ID = null;
     await refreshAdminHotels();
   }catch(e){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
@@ -583,6 +620,13 @@ const DICT = {
     staff_nav_analytics:"إحصائيات المنصة", staff_nav_users:"المستخدمون", staff_nav_audit:"سجل التدقيق",
     edit_hotel:"تعديل", save_changes:"حفظ التغييرات", hotel_updated_ok:"تم تحديث الفندق بنجاح",
     manage_departments:"الأقسام المفعّلة لهذا الفندق",
+    hotel_settings:"الإعدادات", back_to_hotels:"رجوع لإدارة الفنادق",
+    hotel_identity_section:"بيانات وهوية الفندق", departments_section:"الأقسام المفعّلة",
+    system_integration_section:"إعدادات النظام والتكامل",
+    setting_currency:"العملة", setting_timezone:"المنطقة الزمنية",
+    setting_checkin:"وقت تسجيل الدخول", setting_checkout:"وقت تسجيل الخروج",
+    setting_phone:"رقم هاتف التواصل", setting_whatsapp:"رقم واتساب الفندق", setting_logo_url:"رابط شعار الفندق",
+    setting_concierge_enabled:"تفعيل الكونسيرج الذكي (AI) لهذا الفندق",
     archive_hotel:"أرشفة", unarchive_hotel:"إلغاء الأرشفة", status_archived:"مؤرشف",
     confirm_archive_hotel:"هل تريد أرشفة هذا الفندق؟ لن يظهر في القائمة الرئيسية، وبيانات النزلاء والطلبات هتتحفظ.",
     confirm_unarchive_hotel:"هل تريد إلغاء أرشفة هذا الفندق؟",
@@ -667,6 +711,13 @@ const DICT = {
     staff_nav_analytics:"Platform Analytics", staff_nav_users:"Users", staff_nav_audit:"Audit Log",
     edit_hotel:"Edit", save_changes:"Save Changes", hotel_updated_ok:"Hotel updated successfully",
     manage_departments:"Departments enabled for this hotel",
+    hotel_settings:"Settings", back_to_hotels:"Back to Manage Hotels",
+    hotel_identity_section:"Hotel Identity & Branding", departments_section:"Enabled Departments",
+    system_integration_section:"System & Integration Settings",
+    setting_currency:"Currency", setting_timezone:"Timezone",
+    setting_checkin:"Check-in Time", setting_checkout:"Check-out Time",
+    setting_phone:"Contact Phone", setting_whatsapp:"Hotel WhatsApp Number", setting_logo_url:"Hotel Logo URL",
+    setting_concierge_enabled:"Enable AI Concierge for this hotel",
     archive_hotel:"Archive", unarchive_hotel:"Unarchive", status_archived:"Archived",
     confirm_archive_hotel:"Archive this hotel? It will be hidden from the main list; guest and request history is kept.",
     confirm_unarchive_hotel:"Unarchive this hotel?",
@@ -1702,7 +1753,8 @@ function buildStaffNav(){
 }
 function staffNav(key){
   STAFF_CURRENT = key;
-  ADMIN_EDIT_HOTEL_ID = null;
+  ADMIN_SETTINGS_HOTEL_ID = null;
+  ADMIN_CREATE_HOTEL_OPEN = false;
   buildStaffNav();
   staffRender();
   const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
@@ -1840,7 +1892,7 @@ const STAFF_RENDERERS = {
           <button class="btn sm" onclick="toggleCreateHotelForm()">+ ${t('add_hotel')}</button>
         </div>
       </div>
-      <div id="create-hotel-panel" class="card" style="display:none; margin-bottom:16px;">
+      <div id="create-hotel-panel" class="card" style="display:${ADMIN_CREATE_HOTEL_OPEN?'block':'none'}; margin-bottom:16px;">
         <div class="grid grid-2">
           <div class="field"><label>${t('hotel_display_name')}</label><input id="nh-name" placeholder="Zahret Al-Sharq Hotel"></div>
           <div class="field"><label>${t('hotel_slug')}</label><input id="nh-slug" placeholder="zahret-alsharq"></div>
@@ -1857,46 +1909,77 @@ const STAFF_RENDERERS = {
         ${list.length===0?`<p style="color:var(--muted)">${t('no_hotels_yet')}</p>`:
         list.map(h=>{
           const isArchived = !!h.archived_at;
-          const isEditing = ADMIN_EDIT_HOTEL_ID===h.id;
-          const enabled = h.enabled_departments || [];
           return `
-          <div class="list-item" style="flex-direction:column; align-items:stretch;">
-            <div class="row between" style="width:100%;">
-              <div>
-                <div><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></div>
-                <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('created_label')}: ${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</div>
-              </div>
-              <div class="row" style="gap:6px;">
-                <span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span>
-                ${isArchived ? `
-                  <button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>
-                ` : `
-                  <button class="btn sm secondary" onclick="toggleEditHotelPanel(${h.id})">${t('edit_hotel')}</button>
-                  <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
-                  <button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>
-                `}
-              </div>
+          <div class="list-item">
+            <div>
+              <div><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('created_label')}: ${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</div>
             </div>
-            ${isEditing ? `
-              <div class="card" style="margin-top:10px; background:var(--bg2, rgba(0,0,0,0.02));">
-                <div class="field"><label>${t('hotel_display_name')}</label><input id="eh-name-${h.id}" value="${escapeHtml(h.name)}"></div>
-                <div style="margin-top:10px;"><strong style="font-size:13px;">${t('manage_departments')}</strong></div>
-                <div class="grid grid-2" style="margin-top:8px;">
-                  ${ALL_DEPARTMENTS.map(d=>`
-                    <label class="row" style="gap:6px; font-size:13.5px;">
-                      <input type="checkbox" id="eh-dept-${h.id}-${d}" ${enabled.includes(d)?'checked':''}>
-                      <span>${t('nav_'+d)}</span>
-                    </label>
-                  `).join('')}
-                </div>
-                <div class="row" style="gap:8px; margin-top:12px;">
-                  <button class="btn sm" onclick="submitEditHotel(${h.id}, this)">${t('save_changes')}</button>
-                  <button class="btn sm secondary" onclick="toggleEditHotelPanel(${h.id})">${t('cancel')}</button>
-                </div>
-              </div>
-            ` : ''}
+            <div class="row" style="gap:6px;">
+              <span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span>
+              ${isArchived ? `
+                <button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>
+              ` : `
+                <button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button>
+                <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+                <button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>
+              `}
+            </div>
           </div>`;
         }).join('')}
+      </div>
+    `;
+  },
+  'hotel-settings'(){
+    const h = ADMIN_HOTELS.find(x=>x.id===ADMIN_SETTINGS_HOTEL_ID);
+    if(!h){
+      return `${pageHead(t('hotel_settings'))}<div class="card"><p style="color:var(--muted)">${t('no_hotels_yet')}</p></div>
+        <button class="btn sm secondary" onclick="closeHotelSettings()">${t('back_to_hotels')}</button>`;
+    }
+    const enabled = h.enabled_departments || [];
+    return `
+      <div class="row" style="margin-bottom:6px;">
+        <button class="btn sm secondary" onclick="closeHotelSettings()">← ${t('back_to_hotels')}</button>
+      </div>
+      ${pageHead(t('hotel_settings'), escapeHtml(h.name) + ' · ' + escapeHtml(h.slug))}
+
+      <div class="card" style="margin-bottom:16px;">
+        <strong style="display:block; margin-bottom:12px;">${t('hotel_identity_section')}</strong>
+        <div class="grid grid-2">
+          <div class="field"><label>${t('hotel_display_name')}</label><input id="hs-name" value="${escapeHtml(h.name)}"></div>
+          <div class="field"><label>${t('setting_currency')}</label><input id="hs-currency" value="${escapeHtml(h.currency||'SAR')}" placeholder="SAR"></div>
+          <div class="field"><label>${t('setting_timezone')}</label><input id="hs-timezone" value="${escapeHtml(h.timezone||'Asia/Riyadh')}" placeholder="Asia/Riyadh"></div>
+          <div class="field"><label>${t('setting_checkin')}</label><input id="hs-checkin" value="${escapeHtml(h.checkin_time||'15:00')}" placeholder="15:00"></div>
+          <div class="field"><label>${t('setting_checkout')}</label><input id="hs-checkout" value="${escapeHtml(h.checkout_time||'12:00')}" placeholder="12:00"></div>
+          <div class="field"><label>${t('setting_phone')}</label><input id="hs-phone" value="${escapeHtml(h.contact_phone||'')}" placeholder="+966 5X XXX XXXX"></div>
+          <div class="field"><label>${t('setting_whatsapp')}</label><input id="hs-whatsapp" value="${escapeHtml(h.contact_whatsapp||'')}" placeholder="+966 5X XXX XXXX"></div>
+          <div class="field"><label>${t('setting_logo_url')}</label><input id="hs-logo" value="${escapeHtml(h.logo_url||'')}" placeholder="https://..."></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <strong style="display:block; margin-bottom:12px;">${t('departments_section')}</strong>
+        <div class="grid grid-2">
+          ${ALL_DEPARTMENTS.map(d=>`
+            <label class="row" style="gap:6px; font-size:13.5px;">
+              <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
+              <span>${t('nav_'+d)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <strong style="display:block; margin-bottom:12px;">${t('system_integration_section')}</strong>
+        <label class="row" style="gap:8px; font-size:14px;">
+          <input type="checkbox" id="hs-concierge-enabled" ${h.concierge_enabled!==false?'checked':''}>
+          <span>${t('setting_concierge_enabled')}</span>
+        </label>
+      </div>
+
+      <div class="row" style="gap:8px;">
+        <button class="btn" onclick="submitHotelSettings(${h.id}, this)">${t('save_changes')}</button>
+        <button class="btn secondary" onclick="closeHotelSettings()">${t('cancel')}</button>
       </div>
     `;
   },
