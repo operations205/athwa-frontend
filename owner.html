@@ -331,14 +331,25 @@ function mapBackendPrearrival(p){
 const CACHE = { requests:[], feedback:[], prearrivals:[] };
 let REFRESH_TIMER = null;
 let ADMIN_HOTELS = [];
+let ADMIN_HOTELS_SHOW_ARCHIVED = false;
+let ADMIN_EDIT_HOTEL_ID = null;
+let ADMIN_ANALYTICS = null;
+let ADMIN_USERS = [];
+let ADMIN_USERS_HOTEL_FILTER = 'all';
+let ADMIN_AUDIT_LOG = [];
 async function refreshAdminHotels(){
   try{
     const token = getStaffToken();
     if(!token) return;
-    const list = await apiCall('/api/admin/hotels', {token});
+    const qs = ADMIN_HOTELS_SHOW_ARCHIVED ? '?includeArchived=true' : '';
+    const list = await apiCall('/api/admin/hotels'+qs, {token});
     ADMIN_HOTELS = list || [];
     if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
   }catch(e){ /* silent: keep last known list on transient network errors */ }
+}
+function toggleShowArchivedHotels(){
+  ADMIN_HOTELS_SHOW_ARCHIVED = !ADMIN_HOTELS_SHOW_ARCHIVED;
+  refreshAdminHotels();
 }
 function toggleCreateHotelForm(){
   const panel = document.getElementById('create-hotel-panel');
@@ -379,13 +390,101 @@ async function toggleHotelActive(id, currentActive){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }
 }
+function toggleEditHotelPanel(id){
+  ADMIN_EDIT_HOTEL_ID = (ADMIN_EDIT_HOTEL_ID===id) ? null : id;
+  staffRender();
+}
+async function submitEditHotel(id, btn){
+  const nameEl = document.getElementById('eh-name-'+id);
+  const name = nameEl ? nameEl.value.trim() : '';
+  if(!name){ toast(LANG==='ar'?'اسم الفندق مطلوب':'Hotel name is required'); return; }
+  const enabledDepartments = ALL_DEPARTMENTS.filter(d=>{
+    const el = document.getElementById('eh-dept-'+id+'-'+d);
+    return el && el.checked;
+  });
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body:{name, enabledDepartments}});
+    toast(t('hotel_updated_ok'));
+    ADMIN_EDIT_HOTEL_ID = null;
+    await refreshAdminHotels();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+async function archiveHotel(id){
+  if(!confirm(t('confirm_archive_hotel'))) return;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body:{archived:true}});
+    await refreshAdminHotels();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
+async function unarchiveHotel(id){
+  if(!confirm(t('confirm_unarchive_hotel'))) return;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body:{archived:false}});
+    await refreshAdminHotels();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
+async function refreshAdminAnalytics(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_ANALYTICS = await apiCall('/api/admin/analytics', {token});
+    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+  }catch(e){ /* silent */ }
+}
+function setAdminUsersHotelFilter(val){
+  ADMIN_USERS_HOTEL_FILTER = val;
+  staffRender();
+}
+async function refreshAdminUsers(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_USERS = await apiCall('/api/admin/users', {token}) || [];
+    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+  }catch(e){ /* silent */ }
+}
+async function toggleAdminUserActive(id, currentActive){
+  const msg = currentActive ? t('confirm_deactivate_user') : t('confirm_activate_user');
+  if(!confirm(msg)) return;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/users/'+id, {method:'PATCH', token, body:{active: !currentActive}});
+    await refreshAdminUsers();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
+async function refreshAdminAuditLog(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_AUDIT_LOG = await apiCall('/api/admin/audit-log?limit=100', {token}) || [];
+    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+  }catch(e){ /* silent */ }
+}
 async function refreshOpsData(){
   try{
     // super_admin has no hotel scope - it manages hotels platform-wide, not
     // a single hotel's requests/feedback/prearrivals (those endpoints are
-    // 403'd for this role server-side), so poll the hotels list instead.
+    // 403'd for this role server-side), so poll whichever admin section is
+    // currently on screen instead.
     if(S.staff.loggedIn && getStaffToken() && S.staff.role==='super_admin'){
-      await refreshAdminHotels();
+      if(STAFF_CURRENT==='analytics') await refreshAdminAnalytics();
+      else if(STAFF_CURRENT==='users') await refreshAdminUsers();
+      else if(STAFF_CURRENT==='audit') await refreshAdminAuditLog();
+      else await refreshAdminHotels();
     } else if(S.staff.loggedIn && getStaffToken()){
       const token = getStaffToken();
       const [reqs, fb, pre] = await Promise.all([
@@ -481,6 +580,19 @@ const DICT = {
     no_hotels_yet:"لا توجد فنادق بعد", hotel_created_ok:"تم إنشاء الفندق بنجاح",
     confirm_deactivate_hotel:"هل تريد تعطيل هذا الفندق؟ لن يتمكن نزلاؤه وموظفوه من الدخول.",
     confirm_activate_hotel:"هل تريد تفعيل هذا الفندق؟", created_label:"تاريخ الإنشاء",
+    staff_nav_analytics:"إحصائيات المنصة", staff_nav_users:"المستخدمون", staff_nav_audit:"سجل التدقيق",
+    edit_hotel:"تعديل", save_changes:"حفظ التغييرات", hotel_updated_ok:"تم تحديث الفندق بنجاح",
+    manage_departments:"الأقسام المفعّلة لهذا الفندق",
+    archive_hotel:"أرشفة", unarchive_hotel:"إلغاء الأرشفة", status_archived:"مؤرشف",
+    confirm_archive_hotel:"هل تريد أرشفة هذا الفندق؟ لن يظهر في القائمة الرئيسية، وبيانات النزلاء والطلبات هتتحفظ.",
+    confirm_unarchive_hotel:"هل تريد إلغاء أرشفة هذا الفندق؟",
+    show_archived:"عرض المؤرشفة", hide_archived:"إخفاء المؤرشفة",
+    platform_analytics_title:"إحصائيات المنصة", open_requests_kpi:"طلبات مفتوحة", requests_24h_kpi:"طلبات آخر 24 ساعة",
+    active_guests_kpi:"نزلاء نشطون", avg_rating_kpi:"متوسط التقييم", active_staff_kpi:"موظفون نشطون",
+    per_hotel_breakdown:"تفصيل حسب الفندق",
+    platform_users_title:"مستخدمو المنصة", filter_all_hotels:"كل الفنادق", col_hotel:"الفندق", no_users_yet:"لا يوجد مستخدمون",
+    confirm_deactivate_user:"هل تريد تعطيل حساب هذا المستخدم؟", confirm_activate_user:"هل تريد تفعيل حساب هذا المستخدم؟",
+    audit_log_title:"سجل التدقيق", no_audit_yet:"لا يوجد سجل بعد", col_actor:"المستخدم", col_action:"الإجراء", col_time:"الوقت",
     username:"البريد الإلكتروني", password:"كلمة المرور", select_department:"اختر القسم",
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
@@ -552,6 +664,19 @@ const DICT = {
     no_hotels_yet:"No hotels yet", hotel_created_ok:"Hotel created successfully",
     confirm_deactivate_hotel:"Deactivate this hotel? Its guests and staff will be locked out.",
     confirm_activate_hotel:"Activate this hotel?", created_label:"Created",
+    staff_nav_analytics:"Platform Analytics", staff_nav_users:"Users", staff_nav_audit:"Audit Log",
+    edit_hotel:"Edit", save_changes:"Save Changes", hotel_updated_ok:"Hotel updated successfully",
+    manage_departments:"Departments enabled for this hotel",
+    archive_hotel:"Archive", unarchive_hotel:"Unarchive", status_archived:"Archived",
+    confirm_archive_hotel:"Archive this hotel? It will be hidden from the main list; guest and request history is kept.",
+    confirm_unarchive_hotel:"Unarchive this hotel?",
+    show_archived:"Show archived", hide_archived:"Hide archived",
+    platform_analytics_title:"Platform Analytics", open_requests_kpi:"Open Requests", requests_24h_kpi:"Requests (24h)",
+    active_guests_kpi:"Active Guests", avg_rating_kpi:"Avg. Rating", active_staff_kpi:"Active Staff",
+    per_hotel_breakdown:"Per-Hotel Breakdown",
+    platform_users_title:"Platform Users", filter_all_hotels:"All Hotels", col_hotel:"Hotel", no_users_yet:"No users yet",
+    confirm_deactivate_user:"Deactivate this user's account?", confirm_activate_user:"Activate this user's account?",
+    audit_log_title:"Audit Log", no_audit_yet:"No audit entries yet", col_actor:"Actor", col_action:"Action", col_time:"Time",
     username:"Email", password:"Password", select_department:"Select department",
     back:"Back", demo_hint:"Demo mode — any login details work",
     staff_nav_overview:"Overview", staff_nav_requests:"All Requests",
@@ -564,6 +689,13 @@ const DICT = {
 };
 let LANG = localStorage.getItem('karam_lang') || 'ar';
 function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
+// Maps a raw DB role ('owner'|'manager'|'dept_manager'|'staff'|'super_admin')
+// to its display label. dept_manager/staff share the 'role_dept' label since
+// the DICT only distinguishes owner/manager/department-level/platform roles.
+function roleLabel(role){
+  if(role==='dept_manager' || role==='staff') return t('role_dept');
+  return t('role_'+role);
+}
 
 function applyLang(){
   document.documentElement.lang = LANG;
@@ -650,7 +782,7 @@ async function unifiedLogin(btn){
 
   if(res.type === 'guest'){
     setGuestToken(res.token);
-    S.guest = {name: res.guest.name, room: res.guest.room, hotelName: res.guest.hotelName||''};
+    S.guest = {name: res.guest.name, room: res.guest.room, hotelName: res.guest.hotelName||'', enabledDepartments: res.guest.enabledDepartments || ALL_DEPARTMENTS};
     S.loggedIn = true;
     saveState();
     document.getElementById('login-screen').style.display='none';
@@ -669,7 +801,10 @@ async function unifiedLogin(btn){
     // backend role names: owner, manager, dept_manager, staff -> frontend uses 'dept' for dept_manager/staff
     const backendRole = res.user.role;
     const frontRole = (backendRole==='dept_manager'||backendRole==='staff') ? 'dept' : backendRole;
-    S.staff = {loggedIn:true, role:frontRole, dept:res.user.department||null, name:res.user.name};
+    S.staff = {
+      loggedIn:true, role:frontRole, dept:res.user.department||null, name:res.user.name,
+      enabledDepartments: res.user.enabledDepartments || ALL_DEPARTMENTS,
+    };
     saveState();
     document.getElementById('login-screen').style.display='none';
     document.getElementById('staff-app').classList.add('active');
@@ -734,7 +869,13 @@ function buildNav(){
   const sidenav = document.getElementById('sidenav');
   const bottomnav = document.getElementById('bottomnav');
   sidenav.innerHTML=''; bottomnav.innerHTML='';
-  NAV_ITEMS.forEach(key=>{
+  // Department items (reception, dining, spa, ...) are hidden per-hotel via
+  // the super_admin "manage hotel" toggle; non-department items (dashboard,
+  // messages, offers, ...) always show. Falls back to showing everything if
+  // this guest logged in before enabledDepartments existed (undefined = no filter).
+  const enabled = S.guest && S.guest.enabledDepartments;
+  const items = NAV_ITEMS.filter(key => !ALL_DEPARTMENTS.includes(key) || !enabled || enabled.includes(key));
+  items.forEach(key=>{
     const label = t('nav_'+key);
     const html = `<div class="nav-item ${CURRENT===key?'active':''}" onclick="nav('${key}')">${ICONS[key]}<span>${label}</span></div>`;
     sidenav.insertAdjacentHTML('beforeend', html);
@@ -1525,13 +1666,21 @@ const STAFF_ICONS = {
   prearrivals: ICONS.prearrival,
   feedback: ICONS.feedback,
   hotels:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h6"/></svg>',
+  analytics:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="3"/><path d="M2 21v-1.5A4.5 4.5 0 0 1 6.5 15h5A4.5 4.5 0 0 1 16 19.5V21"/><circle cx="17.5" cy="7.5" r="2.3"/><path d="M20.5 21v-1.3a3.7 3.7 0 0 0-2.6-3.5"/></svg>',
+  audit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>',
 };
 const STAFF_NAV_BY_ROLE = {
   owner:['overview','requests','prearrivals','feedback'],
   manager:['overview','requests','prearrivals','feedback'],
   dept:['requests'],
-  super_admin:['hotels'],
+  super_admin:['hotels','analytics','users','audit'],
 };
+// The fixed set of guest/staff department modules the app ships with - kept
+// in sync with ALL_DEPARTMENTS in the backend's routes-hotels.js. Used to
+// build the per-hotel department-toggle checklist in the super_admin "edit
+// hotel" panel.
+const ALL_DEPARTMENTS = ['reception','dining','housekeeping','maintenance','laundry','concierge','spa','taxi','entertainment','billing'];
 function defaultStaffPage(role){
   if(role==='dept') return 'requests';
   if(role==='super_admin') return 'hotels';
@@ -1553,9 +1702,18 @@ function buildStaffNav(){
 }
 function staffNav(key){
   STAFF_CURRENT = key;
+  ADMIN_EDIT_HOTEL_ID = null;
   buildStaffNav();
   staffRender();
   const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
+  // Fetch the newly-selected admin section immediately instead of waiting up
+  // to 6s for the next poll tick, so switching tabs feels instant.
+  if(S.staff.loggedIn && S.staff.role==='super_admin'){
+    if(key==='analytics') refreshAdminAnalytics();
+    else if(key==='users') refreshAdminUsers();
+    else if(key==='audit') refreshAdminAuditLog();
+    else if(key==='hotels') refreshAdminHotels();
+  }
 }
 function staffRender(){
   const main = document.getElementById('staff-main');
@@ -1666,8 +1824,8 @@ const STAFF_RENDERERS = {
   },
   hotels(){
     const list = ADMIN_HOTELS;
-    const activeCount = list.filter(h=>h.active).length;
-    const inactiveCount = list.length - activeCount;
+    const activeCount = list.filter(h=>h.active && !h.archived_at).length;
+    const inactiveCount = list.filter(h=>!h.active && !h.archived_at).length;
     return `
       ${pageHead(t('staff_nav_hotels'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
@@ -1677,7 +1835,10 @@ const STAFF_RENDERERS = {
       </div>
       <div class="row between" style="margin-bottom:14px;">
         <strong>${t('platform_overview')}</strong>
-        <button class="btn sm" onclick="toggleCreateHotelForm()">+ ${t('add_hotel')}</button>
+        <div class="row" style="gap:8px;">
+          <button class="btn sm secondary" onclick="toggleShowArchivedHotels()">${ADMIN_HOTELS_SHOW_ARCHIVED ? t('hide_archived') : t('show_archived')}</button>
+          <button class="btn sm" onclick="toggleCreateHotelForm()">+ ${t('add_hotel')}</button>
+        </div>
       </div>
       <div id="create-hotel-panel" class="card" style="display:none; margin-bottom:16px;">
         <div class="grid grid-2">
@@ -1694,15 +1855,122 @@ const STAFF_RENDERERS = {
       </div>
       <div class="card">
         ${list.length===0?`<p style="color:var(--muted)">${t('no_hotels_yet')}</p>`:
-        list.map(h=>`
+        list.map(h=>{
+          const isArchived = !!h.archived_at;
+          const isEditing = ADMIN_EDIT_HOTEL_ID===h.id;
+          const enabled = h.enabled_departments || [];
+          return `
+          <div class="list-item" style="flex-direction:column; align-items:stretch;">
+            <div class="row between" style="width:100%;">
+              <div>
+                <div><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></div>
+                <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('created_label')}: ${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</div>
+              </div>
+              <div class="row" style="gap:6px;">
+                <span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span>
+                ${isArchived ? `
+                  <button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>
+                ` : `
+                  <button class="btn sm secondary" onclick="toggleEditHotelPanel(${h.id})">${t('edit_hotel')}</button>
+                  <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+                  <button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>
+                `}
+              </div>
+            </div>
+            ${isEditing ? `
+              <div class="card" style="margin-top:10px; background:var(--bg2, rgba(0,0,0,0.02));">
+                <div class="field"><label>${t('hotel_display_name')}</label><input id="eh-name-${h.id}" value="${escapeHtml(h.name)}"></div>
+                <div style="margin-top:10px;"><strong style="font-size:13px;">${t('manage_departments')}</strong></div>
+                <div class="grid grid-2" style="margin-top:8px;">
+                  ${ALL_DEPARTMENTS.map(d=>`
+                    <label class="row" style="gap:6px; font-size:13.5px;">
+                      <input type="checkbox" id="eh-dept-${h.id}-${d}" ${enabled.includes(d)?'checked':''}>
+                      <span>${t('nav_'+d)}</span>
+                    </label>
+                  `).join('')}
+                </div>
+                <div class="row" style="gap:8px; margin-top:12px;">
+                  <button class="btn sm" onclick="submitEditHotel(${h.id}, this)">${t('save_changes')}</button>
+                  <button class="btn sm secondary" onclick="toggleEditHotelPanel(${h.id})">${t('cancel')}</button>
+                </div>
+              </div>
+            ` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+  },
+  analytics(){
+    const a = ADMIN_ANALYTICS;
+    if(!a){
+      return `${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
+    }
+    return `
+      ${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      <div class="grid grid-3" style="margin-bottom:14px;">
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('total_hotels')}</div><div style="font-size:26px; font-weight:700;">${a.hotels.not_archived}</div></div>
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('active_hotels')}</div><div style="font-size:26px; font-weight:700;">${a.hotels.active}</div></div>
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('active_guests_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.guests.active_stays}</div></div>
+      </div>
+      <div class="grid grid-3" style="margin-bottom:20px;">
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('open_requests_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.requests.pending + a.requests.in_progress}</div></div>
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('requests_24h_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.requests.last_24h}</div></div>
+        <div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${t('avg_rating_kpi')}</div><div style="font-size:26px; font-weight:700;">${a.feedback.avg_rating ?? '-'}</div></div>
+      </div>
+      <div class="row between" style="margin-bottom:14px;"><strong>${t('per_hotel_breakdown')}</strong></div>
+      <div class="card">
+        ${a.perHotel.length===0?`<p style="color:var(--muted)">${t('no_hotels_yet')}</p>`:
+        a.perHotel.map(h=>`
           <div class="list-item">
             <div>
               <div><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('created_label')}: ${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${t('active_guests_kpi')}: ${h.active_guests} · ${t('open_requests_kpi')}: ${h.open_requests} · ${t('avg_rating_kpi')}: ${h.avg_rating ?? '-'} · ${t('active_staff_kpi')}: ${h.staff_count}</div>
+            </div>
+            <span class="pill ${h.active?'':'danger'}">${h.active?t('status_active'):t('status_inactive')}</span>
+          </div>`).join('')}
+      </div>
+    `;
+  },
+  users(){
+    const filter = ADMIN_USERS_HOTEL_FILTER;
+    const list = filter==='all' ? ADMIN_USERS : ADMIN_USERS.filter(u=>String(u.hotel_id)===String(filter));
+    const hotelOptions = ADMIN_HOTELS.map(h=>`<option value="${h.id}" ${String(filter)===String(h.id)?'selected':''}>${escapeHtml(h.name)}</option>`).join('');
+    return `
+      ${pageHead(t('platform_users_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      <div class="row between" style="margin-bottom:14px;">
+        <strong>${t('platform_users_title')}</strong>
+        <select id="admin-users-hotel-filter" onchange="setAdminUsersHotelFilter(this.value)">
+          <option value="all" ${filter==='all'?'selected':''}>${t('filter_all_hotels')}</option>
+          ${hotelOptions}
+        </select>
+      </div>
+      <div class="card">
+        ${list.length===0?`<p style="color:var(--muted)">${t('no_users_yet')}</p>`:
+        list.map(u=>`
+          <div class="list-item">
+            <div>
+              <div><strong>${escapeHtml(u.name)}</strong> <span style="color:var(--muted); font-size:12px;">${escapeHtml(u.email)}</span></div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''} · ${t('col_hotel')}: ${escapeHtml(u.hotel_name)}</div>
             </div>
             <div class="row" style="gap:6px;">
-              <span class="pill ${h.active?'':'danger'}">${h.active?t('status_active'):t('status_inactive')}</span>
-              <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+              <span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span>
+              <button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    `;
+  },
+  audit(){
+    const list = ADMIN_AUDIT_LOG;
+    return `
+      ${pageHead(t('audit_log_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      <div class="card">
+        ${list.length===0?`<p style="color:var(--muted)">${t('no_audit_yet')}</p>`:
+        list.map(e=>`
+          <div class="list-item">
+            <div>
+              <div><strong>${escapeHtml(e.action)}</strong> <span style="color:var(--muted); font-size:12px;">${escapeHtml(e.actor_name||e.actor_type)}</span></div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${e.created_at ? new Date(e.created_at).toLocaleString() : '-'}${e.target_type?' · '+escapeHtml(e.target_type)+(e.target_id?' #'+e.target_id:''):''}</div>
             </div>
           </div>`).join('')}
       </div>
@@ -1719,7 +1987,7 @@ const STAFF_RENDERERS = {
       ${!isDept?`
         <div class="menu-cat-tabs">
           <button class="${filterDept==='all'?'active':''}" onclick="window.__staffDeptFilter='all'; staffRender();">${t('all_depts')}</button>
-          ${DEPTS_WITH_QUEUE.map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${t('nav_'+d)}</button>`).join('')}
+          ${DEPTS_WITH_QUEUE.filter(d=>!S.staff.enabledDepartments || S.staff.enabledDepartments.includes(d)).map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${t('nav_'+d)}</button>`).join('')}
         </div>`:''}
       <div class="card">
         ${all.length===0?`<p style="color:var(--muted)">${t('no_data')}</p>`:
