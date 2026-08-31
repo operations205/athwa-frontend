@@ -377,6 +377,122 @@ const CACHE = { requests:[], feedback:[], prearrivals:[] };
 let REFRESH_TIMER = null;
 let ADMIN_HOTELS = [];
 let ADMIN_HOTELS_SHOW_ARCHIVED = false;
+// Table filters/sort - persisted to localStorage (not the main app state
+// blob, which is shared across every role) so a platform_admin's saved
+// hotels-table view survives a refresh/re-login without touching anything
+// else. Loaded once at boot via loadHotelsFilters().
+let ADMIN_HOTELS_FILTER_STATUS = 'all'; // all | active | inactive
+let ADMIN_HOTELS_FILTER_PLAN = 'all';   // all | standard | premium | enterprise
+let ADMIN_HOTELS_FILTER_BILLING = 'all'; // all | active | trial | overdue | suspended
+let ADMIN_HOTELS_SORT_BY = 'created_at'; // name | plan | billing_status | created_at
+let ADMIN_HOTELS_SORT_DIR = 'desc'; // asc | desc
+let ADMIN_HOTELS_SELECTED = new Set(); // hotel ids checked for bulk actions
+function loadHotelsFilters(){
+  try{
+    const raw = localStorage.getItem('athwa_hotels_filters');
+    if(!raw) return;
+    const f = JSON.parse(raw);
+    if(f.status) ADMIN_HOTELS_FILTER_STATUS = f.status;
+    if(f.plan) ADMIN_HOTELS_FILTER_PLAN = f.plan;
+    if(f.billing) ADMIN_HOTELS_FILTER_BILLING = f.billing;
+    if(f.sortBy) ADMIN_HOTELS_SORT_BY = f.sortBy;
+    if(f.sortDir) ADMIN_HOTELS_SORT_DIR = f.sortDir;
+  }catch(e){ /* corrupt/old saved filter shape - ignore, defaults stand */ }
+}
+function saveHotelsFilters(){
+  try{
+    localStorage.setItem('athwa_hotels_filters', JSON.stringify({
+      status: ADMIN_HOTELS_FILTER_STATUS, plan: ADMIN_HOTELS_FILTER_PLAN, billing: ADMIN_HOTELS_FILTER_BILLING,
+      sortBy: ADMIN_HOTELS_SORT_BY, sortDir: ADMIN_HOTELS_SORT_DIR,
+    }));
+  }catch(e){ /* private browsing / storage disabled - filters just won't persist */ }
+}
+function setHotelsFilter(kind, val){
+  if(kind==='status') ADMIN_HOTELS_FILTER_STATUS = val;
+  else if(kind==='plan') ADMIN_HOTELS_FILTER_PLAN = val;
+  else if(kind==='billing') ADMIN_HOTELS_FILTER_BILLING = val;
+  saveHotelsFilters();
+  staffRender();
+}
+function setHotelsSortBy(col){
+  if(ADMIN_HOTELS_SORT_BY===col){ ADMIN_HOTELS_SORT_DIR = ADMIN_HOTELS_SORT_DIR==='asc' ? 'desc' : 'asc'; }
+  else { ADMIN_HOTELS_SORT_BY = col; ADMIN_HOTELS_SORT_DIR = 'asc'; }
+  saveHotelsFilters();
+  staffRender();
+}
+// Applies the current filter/sort selection to the already-fetched, real
+// ADMIN_HOTELS list. This runs client-side over the full dataset rather than
+// via server pagination - at this platform's current scale that's simpler
+// and just as real (no data is invented or hidden), and it composes cleanly
+// with the existing free-text search box's client-side row filtering.
+function getFilteredSortedHotels(){
+  let list = ADMIN_HOTELS.slice();
+  if(ADMIN_HOTELS_FILTER_STATUS==='active') list = list.filter(h=>h.active && !h.archived_at);
+  else if(ADMIN_HOTELS_FILTER_STATUS==='inactive') list = list.filter(h=>!h.active && !h.archived_at);
+  if(ADMIN_HOTELS_FILTER_PLAN!=='all') list = list.filter(h=>(h.plan||'standard')===ADMIN_HOTELS_FILTER_PLAN);
+  if(ADMIN_HOTELS_FILTER_BILLING!=='all') list = list.filter(h=>(h.billing_status||'active')===ADMIN_HOTELS_FILTER_BILLING);
+  const dir = ADMIN_HOTELS_SORT_DIR==='asc' ? 1 : -1;
+  const key = ADMIN_HOTELS_SORT_BY;
+  list.sort((a,b)=>{
+    let av, bv;
+    if(key==='name'){ av=(a.name||'').toLowerCase(); bv=(b.name||'').toLowerCase(); }
+    else if(key==='plan'){ av=a.plan||'standard'; bv=b.plan||'standard'; }
+    else if(key==='billing_status'){ av=a.billing_status||'active'; bv=b.billing_status||'active'; }
+    else { av=a.created_at||''; bv=b.created_at||''; }
+    if(av<bv) return -1*dir;
+    if(av>bv) return 1*dir;
+    return 0;
+  });
+  return list;
+}
+function toggleHotelSelected(id, checked){
+  if(checked) ADMIN_HOTELS_SELECTED.add(id); else ADMIN_HOTELS_SELECTED.delete(id);
+  staffRenderHotelsBulkBarOnly();
+}
+function toggleAllHotelsSelected(checked){
+  const visible = getFilteredSortedHotels();
+  if(checked) visible.forEach(h=>{ if(!h.archived_at) ADMIN_HOTELS_SELECTED.add(h.id); });
+  else ADMIN_HOTELS_SELECTED.clear();
+  staffRender();
+}
+// Re-renders just the bulk-actions bar + checkbox states (not the whole
+// hotels page) so checking a box doesn't fight with table scroll position.
+function staffRenderHotelsBulkBarOnly(){
+  if(STAFF_CURRENT!=='hotels') return;
+  const bar = document.getElementById('hotels-bulk-bar');
+  if(bar) bar.outerHTML = renderHotelsBulkBar();
+}
+function renderHotelsBulkBar(){
+  const n = ADMIN_HOTELS_SELECTED.size;
+  return `<div id="hotels-bulk-bar" class="row between" style="margin-bottom:${n>0?'10px':'0'}; gap:10px; flex-wrap:wrap; ${n>0?'':'display:none;'}">
+    <span style="font-size:12.5px; color:var(--muted);">${t('bulk_selected_count').replace('{n}', n)}</span>
+    <div class="row" style="gap:8px;">
+      <button class="btn sm secondary" onclick="bulkHotelsAction('activate')">${t('bulk_activate')}</button>
+      <button class="btn sm secondary" onclick="bulkHotelsAction('deactivate')">${t('bulk_deactivate')}</button>
+      <button class="btn sm secondary" onclick="bulkHotelsAction('archive')">${t('bulk_archive')}</button>
+    </div>
+  </div>`;
+}
+async function bulkHotelsAction(action){
+  const ids = Array.from(ADMIN_HOTELS_SELECTED);
+  if(ids.length===0) return;
+  const confirmMsg = action==='activate' ? t('confirm_bulk_activate') : action==='deactivate' ? t('confirm_bulk_deactivate') : t('confirm_bulk_archive');
+  if(!confirm(confirmMsg.replace('{n}', ids.length))) return;
+  const token = getStaffToken();
+  const body = action==='archive' ? {archived:true} : {active: action==='activate'};
+  let okCount = 0, failCount = 0;
+  for(const id of ids){
+    try{
+      await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body});
+      okCount++;
+    }catch(e){ failCount++; }
+  }
+  ADMIN_HOTELS_SELECTED.clear();
+  await refreshAdminHotels();
+  toast(failCount===0
+    ? t('bulk_action_ok').replace('{n}', okCount)
+    : t('bulk_action_partial').replace('{ok}', okCount).replace('{fail}', failCount));
+}
 let ADMIN_SETTINGS_HOTEL_ID = null;
 let ADMIN_CREATE_HOTEL_OPEN = false;
 let ADMIN_ANALYTICS = null;
@@ -881,6 +997,13 @@ const DICT = {
     readonly_admin_notice:"حسابك بصلاحية عرض فقط — بعض الإجراءات معطّلة",
     confirm_deactivate_admin:"هل تريد تعطيل حساب هذا المشرف؟", confirm_activate_admin:"هل تريد تفعيل حساب هذا المشرف؟",
     cannot_edit_self:"لا يمكنك تعديل حسابك الخاص من هنا",
+    filter_status_label:"الحالة", filter_plan_label:"الباقة", filter_billing_label:"الفوترة",
+    all_statuses:"كل الحالات", all_plans:"كل الباقات", all_billing:"كل حالات الفوترة",
+    select_all:"تحديد الكل",
+    bulk_selected_count:"{n} محدد", bulk_activate:"تفعيل", bulk_deactivate:"تعطيل", bulk_archive:"أرشفة",
+    confirm_bulk_activate:"هل تريد تفعيل الفنادق المحددة؟", confirm_bulk_deactivate:"هل تريد تعطيل الفنادق المحددة؟",
+    confirm_bulk_archive:"هل تريد أرشفة الفنادق المحددة؟ يمكن التراجع لاحقًا.",
+    bulk_action_ok:"{n} تم تنفيذ الإجراء على", bulk_action_partial:"تم التنفيذ على {ok} — وفشل {fail}",
     username:"البريد الإلكتروني", password:"كلمة المرور", select_department:"اختر القسم",
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
@@ -1008,6 +1131,13 @@ const DICT = {
     requires_attention_title:"Requires your attention", view_all_alerts:"View all alerts",
     quick_manage_hotels:"Manage Hotels", quick_view_alerts:"View Alerts", quick_global_search:"Global Search",
     readonly_admin_notice:"Your account is read-only — some actions are disabled",
+    filter_status_label:"Status", filter_plan_label:"Plan", filter_billing_label:"Billing",
+    all_statuses:"All statuses", all_plans:"All plans", all_billing:"All billing statuses",
+    select_all:"Select all",
+    bulk_selected_count:"{n} selected", bulk_activate:"Activate", bulk_deactivate:"Deactivate", bulk_archive:"Archive",
+    confirm_bulk_activate:"Activate the selected hotels?", confirm_bulk_deactivate:"Deactivate the selected hotels?",
+    confirm_bulk_archive:"Archive the selected hotels? This can be undone later.",
+    bulk_action_ok:"Action applied to {n} hotel(s)", bulk_action_partial:"Applied to {ok}, failed for {fail}",
     confirm_deactivate_admin:"Deactivate this admin's account?", confirm_activate_admin:"Activate this admin's account?",
     cannot_edit_self:"You cannot edit your own account here",
     confirm_deactivate_user:"Deactivate this user's account?", confirm_activate_user:"Activate this user's account?",
@@ -2183,7 +2313,14 @@ function chartBar(label, value, max, colorVar){
 // array of plain objects; `columns` is [[header, key-or-fn], ...]. Downloads
 // via a Blob + temporary <a download> (works fully offline, no server call).
 function csvEscape(v){
-  const s = v===null || v===undefined ? '' : String(v);
+  let s = v===null || v===undefined ? '' : String(v);
+  // CSV/formula-injection guard: a cell starting with =, +, -, @ (or a tab/CR)
+  // can be interpreted as a formula by Excel/Sheets/LibreOffice when the file
+  // is opened, which is a real attack vector for exported data that includes
+  // user-entered text (hotel names, notes, etc). Prefixing with a single
+  // quote neutralizes it in every spreadsheet app while leaving the visible
+  // value unchanged.
+  if(/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
 }
 function exportCSV(filename, columns, rows){
@@ -2198,11 +2335,14 @@ function exportCSV(filename, columns, rows){
   URL.revokeObjectURL(url);
 }
 function exportHotelsCSV(){
+  // Exports what's currently on screen (filtered + sorted), not the raw
+  // unfiltered list - matches user expectation for a "export" button next to
+  // active filters.
   exportCSV('athwa-hotels.csv',
     [['Name','name'],['Slug','slug'],['Status',h=>h.archived_at?'archived':(h.active?'active':'inactive')],
      ['Plan','plan'],['Billing Status','billing_status'],['Departments',h=>(h.enabled_departments||[]).length+'/'+ALL_DEPARTMENTS.length],
      ['Created', h=>h.created_at?new Date(h.created_at).toISOString():'']],
-    ADMIN_HOTELS);
+    getFilteredSortedHotels());
 }
 function exportUsersCSV(){
   const filter = ADMIN_USERS_HOTEL_FILTER;
@@ -2367,9 +2507,17 @@ const STAFF_RENDERERS = {
     `;
   },
   hotels(){
-    const list = ADMIN_HOTELS;
-    const activeCount = list.filter(h=>h.active && !h.archived_at).length;
-    const inactiveCount = list.filter(h=>!h.active && !h.archived_at).length;
+    // KPI cards always reflect the FULL fetched dataset, not the active
+    // filters - a platform_admin filtering the table to "overdue" shouldn't
+    // see "Total hotels: 2" and think 2 is the whole platform.
+    const fullList = ADMIN_HOTELS;
+    const activeCount = fullList.filter(h=>h.active && !h.archived_at).length;
+    const inactiveCount = fullList.filter(h=>!h.active && !h.archived_at).length;
+    const list = getFilteredSortedHotels();
+    const selectableIds = list.filter(h=>!h.archived_at).map(h=>h.id);
+    const allSelected = selectableIds.length>0 && selectableIds.every(id=>ADMIN_HOTELS_SELECTED.has(id));
+    const sortArrow = col => ADMIN_HOTELS_SORT_BY!==col ? '' : (ADMIN_HOTELS_SORT_DIR==='asc' ? ' ▲' : ' ▼');
+    const sortTh = (col, label) => `<th class="sortable" style="cursor:pointer; white-space:nowrap;" onclick="setHotelsSortBy('${col}')">${label}${sortArrow(col)}</th>`;
     const rows = list.map(h=>{
       const isArchived = !!h.archived_at;
       const searchKey = (h.name+' '+h.slug).toLowerCase();
@@ -2378,6 +2526,7 @@ const STAFF_RENDERERS = {
       const billingPillClass = billingStatus==='overdue' ? 'danger' : billingStatus==='suspended' ? 'danger' : billingStatus==='trial' ? 'info' : '';
       return `
         <tr data-search="${escapeHtml(searchKey)}">
+          <td><input type="checkbox" ${isArchived?'disabled':''} ${ADMIN_HOTELS_SELECTED.has(h.id)?'checked':''} onchange="toggleHotelSelected(${h.id}, this.checked)"></td>
           <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
           <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
           <td>${t('plan_'+(h.plan||'standard'))}</td>
@@ -2400,7 +2549,7 @@ const STAFF_RENDERERS = {
     return `
       ${pageHead(t('staff_nav_hotels'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
-        ${kpiCard(ICONS_ADMIN.building, t('total_hotels'), list.length)}
+        ${kpiCard(ICONS_ADMIN.building, t('total_hotels'), fullList.length)}
         ${kpiCard(STAFF_ICONS.hotels, t('active_hotels'), activeCount)}
         ${kpiCard(ICONS_ADMIN.power, t('inactive_hotels'), inactiveCount)}
       </div>
@@ -2424,6 +2573,31 @@ const STAFF_RENDERERS = {
           <button class="btn secondary" onclick="toggleCreateHotelForm()">${t('cancel')}</button>
         </div>
       </div>
+      <div class="row" style="gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+        <div class="field" style="margin:0;">
+          <label style="font-size:11px;">${t('filter_status_label')}</label>
+          <select onchange="setHotelsFilter('status', this.value)">
+            <option value="all" ${ADMIN_HOTELS_FILTER_STATUS==='all'?'selected':''}>${t('all_statuses')}</option>
+            <option value="active" ${ADMIN_HOTELS_FILTER_STATUS==='active'?'selected':''}>${t('status_active')}</option>
+            <option value="inactive" ${ADMIN_HOTELS_FILTER_STATUS==='inactive'?'selected':''}>${t('status_inactive')}</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0;">
+          <label style="font-size:11px;">${t('filter_plan_label')}</label>
+          <select onchange="setHotelsFilter('plan', this.value)">
+            <option value="all" ${ADMIN_HOTELS_FILTER_PLAN==='all'?'selected':''}>${t('all_plans')}</option>
+            ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" style="margin:0;">
+          <label style="font-size:11px;">${t('filter_billing_label')}</label>
+          <select onchange="setHotelsFilter('billing', this.value)">
+            <option value="all" ${ADMIN_HOTELS_FILTER_BILLING==='all'?'selected':''}>${t('all_billing')}</option>
+            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${ADMIN_HOTELS_FILTER_BILLING===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      ${renderHotelsBulkBar()}
       <div class="row" style="gap:10px; align-items:flex-start;">
         <div style="flex:1;">${searchBar('hotels-search', t('search_hotels_ph'), "filterTableRows(this.value,'hotels-tbody')")}</div>
         <button class="btn sm secondary" onclick="exportHotelsCSV()">${t('export_csv')}</button>
@@ -2431,11 +2605,18 @@ const STAFF_RENDERERS = {
       <div class="dtable-wrap">
         <table class="dtable">
           <thead><tr>
-            <th>${t('col_hotel')}</th><th>${t('col_status')}</th><th>${t('col_plan')}</th><th>${t('col_billing')}</th><th>${t('col_departments')}</th><th>${t('created_label')}</th><th></th>
+            <th style="width:1%;"><input type="checkbox" title="${t('select_all')}" ${allSelected?'checked':''} onchange="toggleAllHotelsSelected(this.checked)"></th>
+            ${sortTh('name', t('col_hotel'))}
+            <th>${t('col_status')}</th>
+            ${sortTh('plan', t('col_plan'))}
+            ${sortTh('billing_status', t('col_billing'))}
+            <th>${t('col_departments')}</th>
+            ${sortTh('created_at', t('created_label'))}
+            <th></th>
           </tr></thead>
           <tbody id="hotels-tbody">
             ${rows}
-            <tr data-empty style="display:${list.length?'none':''}"><td colspan="7" class="dtable-empty">${t('no_hotels_yet')}</td></tr>
+            <tr data-empty style="display:${list.length?'none':''}"><td colspan="8" class="dtable-empty">${t('no_hotels_yet')}</td></tr>
           </tbody>
         </table>
       </div>
@@ -2855,6 +3036,7 @@ function renderAdminSearchResults(){
 
 /* ---------------- Boot ---------------- */
 function boot(){
+  loadHotelsFilters();
   // a locally-remembered logged-in flag with no live token is a stale/expired session — force back to login
   if(S.loggedIn && !getGuestToken()) S.loggedIn = false;
   if(S.staff.loggedIn && !getStaffToken()) S.staff = {loggedIn:false, role:null, dept:null, name:''};
