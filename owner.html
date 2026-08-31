@@ -380,6 +380,10 @@ let ADMIN_HOTELS_SHOW_ARCHIVED = false;
 let ADMIN_SETTINGS_HOTEL_ID = null;
 let ADMIN_CREATE_HOTEL_OPEN = false;
 let ADMIN_ANALYTICS = null;
+let ADMIN_DASHBOARD = null;
+let ADMIN_DASHBOARD_PERIOD = '30d';
+let ADMIN_DASHBOARD_LAST_UPDATED = null;
+let ADMIN_DASHBOARD_LOADING = false;
 let ADMIN_USERS = [];
 let ADMIN_USERS_HOTEL_FILTER = 'all';
 let ADMIN_AUDIT_LOG = [];
@@ -549,6 +553,31 @@ async function refreshAdminAnalytics(){
     if(S.staff.loggedIn && S.staff.role==='platform_admin') staffRender();
   }catch(e){ /* silent */ }
 }
+// Dashboard fetch is separate from refreshAdminAnalytics: it passes the
+// selected period filter and hits the same /analytics endpoint (which
+// returns both the current-state totals the analytics page uses AND the
+// period-scoped/growth-chart/billing-snapshot fields the dashboard needs).
+// Keeps ADMIN_DASHBOARD showing the previous period's data while a new
+// period loads (no flash-to-empty), signalled instead by ADMIN_DASHBOARD_LOADING.
+async function refreshAdminDashboard(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_DASHBOARD_LOADING = true;
+    if(STAFF_CURRENT==='dashboard') staffRender();
+    ADMIN_DASHBOARD = await apiCall('/api/admin/analytics?period='+encodeURIComponent(ADMIN_DASHBOARD_PERIOD), {token});
+    ADMIN_DASHBOARD_LAST_UPDATED = new Date();
+  }catch(e){ /* silent: keep last known dashboard data on transient network errors */
+  }finally{
+    ADMIN_DASHBOARD_LOADING = false;
+    if(S.staff.loggedIn && S.staff.role==='platform_admin' && STAFF_CURRENT==='dashboard') staffRender();
+  }
+}
+function setAdminDashboardPeriod(period){
+  if(period===ADMIN_DASHBOARD_PERIOD) return;
+  ADMIN_DASHBOARD_PERIOD = period;
+  refreshAdminDashboard();
+}
 function setAdminUsersHotelFilter(val){
   ADMIN_USERS_HOTEL_FILTER = val;
   staffRender();
@@ -689,7 +718,8 @@ async function refreshOpsData(){
     // 403'd for this role server-side), so poll whichever admin section is
     // currently on screen instead.
     if(S.staff.loggedIn && getStaffToken() && S.staff.role==='platform_admin'){
-      if(STAFF_CURRENT==='analytics') await refreshAdminAnalytics();
+      if(STAFF_CURRENT==='dashboard'){ await refreshAdminDashboard(); await refreshAdminAlerts(); }
+      else if(STAFF_CURRENT==='analytics') await refreshAdminAnalytics();
       else if(STAFF_CURRENT==='users') await refreshAdminUsers();
       else if(STAFF_CURRENT==='audit') await refreshAdminAuditLog();
       else if(STAFF_CURRENT==='alerts') await refreshAdminAlerts();
@@ -836,6 +866,18 @@ const DICT = {
     col_scope:"الصلاحية", new_admin_name:"اسم المشرف", new_admin_email:"البريد الإلكتروني",
     new_admin_password:"كلمة المرور", new_admin_scope:"مستوى الصلاحية",
     platform_admin_added_ok:"تم إضافة المشرف بنجاح", export_csv:"تصدير CSV",
+    staff_nav_dashboard:"لوحة التحكم", dashboard_title:"لوحة تحكم المنصة",
+    period_today:"اليوم", period_7d:"٧ أيام", period_30d:"٣٠ يومًا", period_90d:"٩٠ يومًا",
+    last_updated_label:"آخر تحديث:", loading_label:"جارٍ التحديث...", refresh_label:"تحديث",
+    dashboard_period_section:"خلال الفترة المحددة", dashboard_now_section:"الوضع الحالي",
+    dashboard_billing_section:"لمحة الفوترة",
+    billing_snapshot_note:"يعكس ما تم تسجيله يدويًا في حالة الفوترة لكل فندق — وليس مبالغ محصّلة فعليًا عبر بوابة دفع (لا توجد بوابة دفع مربوطة بالمنصة).",
+    new_hotels_kpi:"فنادق جديدة", new_users_kpi:"مستخدمون جدد", new_requests_kpi:"طلبات جديدة", resolved_requests_kpi:"طلبات مكتملة",
+    billing_active_kpi:"فنادق سارية الدفع", billing_overdue_kpi:"فنادق متأخرة الدفع", billing_trial_kpi:"فنادق تجريبية",
+    billing_recorded_amount_kpi:"إجمالي المسجل (سارية)",
+    hotels_growth_chart_title:"نمو الفنادق الجديدة", no_growth_data:"لا يوجد نمو مسجّل خلال هذه الفترة",
+    requires_attention_title:"يتطلب انتباهك", view_all_alerts:"عرض كل التنبيهات",
+    quick_manage_hotels:"إدارة الفنادق", quick_view_alerts:"عرض التنبيهات", quick_global_search:"البحث الشامل",
     readonly_admin_notice:"حسابك بصلاحية عرض فقط — بعض الإجراءات معطّلة",
     confirm_deactivate_admin:"هل تريد تعطيل حساب هذا المشرف؟", confirm_activate_admin:"هل تريد تفعيل حساب هذا المشرف؟",
     cannot_edit_self:"لا يمكنك تعديل حسابك الخاص من هنا",
@@ -953,6 +995,18 @@ const DICT = {
     col_scope:"Access", new_admin_name:"Admin Name", new_admin_email:"Email",
     new_admin_password:"Password", new_admin_scope:"Access Level",
     platform_admin_added_ok:"Platform admin added successfully", export_csv:"Export CSV",
+    staff_nav_dashboard:"Dashboard", dashboard_title:"Platform Dashboard",
+    period_today:"Today", period_7d:"7 days", period_30d:"30 days", period_90d:"90 days",
+    last_updated_label:"Last updated:", loading_label:"Refreshing...", refresh_label:"Refresh",
+    dashboard_period_section:"In the selected period", dashboard_now_section:"Right now",
+    dashboard_billing_section:"Billing snapshot",
+    billing_snapshot_note:"Reflects each hotel's manually-recorded billing status, not real payments collected via a gateway (no payment gateway is connected to this platform).",
+    new_hotels_kpi:"New hotels", new_users_kpi:"New users", new_requests_kpi:"New requests", resolved_requests_kpi:"Resolved requests",
+    billing_active_kpi:"Hotels billing-active", billing_overdue_kpi:"Hotels billing-overdue", billing_trial_kpi:"Hotels on trial",
+    billing_recorded_amount_kpi:"Total recorded (active)",
+    hotels_growth_chart_title:"New hotel growth", no_growth_data:"No growth recorded in this period",
+    requires_attention_title:"Requires your attention", view_all_alerts:"View all alerts",
+    quick_manage_hotels:"Manage Hotels", quick_view_alerts:"View Alerts", quick_global_search:"Global Search",
     readonly_admin_notice:"Your account is read-only — some actions are disabled",
     confirm_deactivate_admin:"Deactivate this admin's account?", confirm_activate_admin:"Activate this admin's account?",
     cannot_edit_self:"You cannot edit your own account here",
@@ -1923,7 +1977,7 @@ async function adminLogin(btn){
   document.getElementById('staff-app').classList.add('active');
   updateStaffRoleLabel();
   buildStaffNav();
-  staffNav('hotels');
+  staffNav(defaultStaffPage('platform_admin'));
   startLivePolling();
 }
 function staffLogout(){
@@ -1943,6 +1997,7 @@ function updateStaffRoleLabel(){
 /* ---------------- Staff nav ---------------- */
 const STAFF_ICONS = {
   overview:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+  dashboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
   requests:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v2h6V3M8 10h8M8 14h8M8 18h5"/></svg>',
   prearrivals: ICONS.prearrival,
   feedback: ICONS.feedback,
@@ -1958,7 +2013,7 @@ const STAFF_NAV_BY_ROLE = {
   owner:['overview','requests','prearrivals','feedback'],
   manager:['overview','requests','prearrivals','feedback'],
   dept:['requests'],
-  platform_admin:['hotels','analytics','users','audit','alerts','search','settings'],
+  platform_admin:['dashboard','hotels','analytics','users','audit','alerts','search','settings'],
 };
 // The fixed set of guest/staff department modules the app ships with - kept
 // in sync with ALL_DEPARTMENTS in the backend's routes-hotels.js. Used to
@@ -1967,7 +2022,7 @@ const STAFF_NAV_BY_ROLE = {
 const ALL_DEPARTMENTS = ['reception','dining','housekeeping','maintenance','laundry','concierge','spa','taxi','entertainment','billing'];
 function defaultStaffPage(role){
   if(role==='dept') return 'requests';
-  if(role==='platform_admin') return 'hotels';
+  if(role==='platform_admin') return 'dashboard';
   return 'overview';
 }
 let STAFF_CURRENT = 'overview';
@@ -1994,7 +2049,8 @@ function staffNav(key){
   // Fetch the newly-selected admin section immediately instead of waiting up
   // to 6s for the next poll tick, so switching tabs feels instant.
   if(S.staff.loggedIn && S.staff.role==='platform_admin'){
-    if(key==='analytics') refreshAdminAnalytics();
+    if(key==='dashboard'){ refreshAdminDashboard(); refreshAdminAlerts(); }
+    else if(key==='analytics') refreshAdminAnalytics();
     else if(key==='users') refreshAdminUsers();
     else if(key==='audit') refreshAdminAuditLog();
     else if(key==='hotels') refreshAdminHotels();
@@ -2169,8 +2225,120 @@ function exportAnalyticsCSV(){
     ADMIN_ANALYTICS.perHotel);
 }
 
+// Aggregates a {date,count} daily series into ISO-week (Mon-start) buckets
+// once there are more than 14 points, so a 90-day period renders ~13 bars
+// instead of ~90 unreadable ones. Left as daily for 7d/30d.
+function bucketGrowthForChart(entries){
+  if(!entries || entries.length===0) return [];
+  if(entries.length<=14) return entries;
+  const weekMap = {};
+  entries.forEach(e=>{
+    const d = new Date(e.date+'T00:00:00Z');
+    const dow = (d.getUTCDay()+6)%7; // 0=Monday
+    const weekStart = new Date(d); weekStart.setUTCDate(d.getUTCDate()-dow);
+    const key = weekStart.toISOString().slice(0,10);
+    weekMap[key] = (weekMap[key]||0) + e.count;
+  });
+  return Object.entries(weekMap).map(([date,count])=>({date,count})).sort((a,b)=>a.date<b.date?-1:1);
+}
+function formatShortDate(iso){
+  const d = new Date(iso+'T00:00:00Z');
+  return d.toLocaleDateString(LANG==='ar'?'ar-SA':'en-US', {month:'short', day:'numeric'});
+}
+
 /* ---------------- Staff renderers ---------------- */
 const STAFF_RENDERERS = {
+  dashboard(){
+    const d = ADMIN_DASHBOARD;
+    const period = ADMIN_DASHBOARD_PERIOD;
+    const periods = [['today',t('period_today')], ['7d',t('period_7d')], ['30d',t('period_30d')], ['90d',t('period_90d')]];
+    const periodButtons = periods.map(([key,label])=>
+      `<button class="btn sm ${period===key?'':'secondary'}" onclick="setAdminDashboardPeriod('${key}')" ${ADMIN_DASHBOARD_LOADING?'disabled':''}>${label}</button>`
+    ).join('');
+    const lastUpdatedText = ADMIN_DASHBOARD_LAST_UPDATED
+      ? t('last_updated_label')+' '+ADMIN_DASHBOARD_LAST_UPDATED.toLocaleTimeString(LANG==='ar'?'ar-SA':'en-US', {hour:'2-digit', minute:'2-digit'})
+      : '';
+    const headerControls = `
+      <div class="row between wrap" style="margin-bottom:18px; gap:10px;">
+        <div class="row" style="gap:6px;">${periodButtons}</div>
+        <div class="row" style="gap:10px; align-items:center;">
+          <span style="color:var(--muted); font-size:12px;">${ADMIN_DASHBOARD_LOADING ? t('loading_label') : lastUpdatedText}</span>
+          <button class="btn sm secondary" onclick="refreshAdminDashboard()">${t('refresh_label')}</button>
+        </div>
+      </div>`;
+
+    if(!d){
+      return `
+        ${pageHead(t('dashboard_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+        ${headerControls}
+        <div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>
+      `;
+    }
+
+    const ps = d.periodStats || {};
+    const billing = d.billing || {};
+    const growth = bucketGrowthForChart(d.hotelsGrowth || []);
+    const maxGrowth = Math.max(1, ...growth.map(g=>g.count));
+    const topAlerts = (ADMIN_ALERTS||[]).slice(0,3);
+
+    return `
+      ${pageHead(t('dashboard_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${headerControls}
+
+      <strong style="display:block; margin:0 0 10px; font-size:13px; color:var(--muted);">${t('dashboard_period_section')}</strong>
+      <div class="grid grid-4" style="margin-bottom:20px;">
+        ${kpiCard(STAFF_ICONS.hotels, t('new_hotels_kpi'), ps.newHotels ?? 0)}
+        ${kpiCard(STAFF_ICONS.users, t('new_users_kpi'), ps.newUsers ?? 0)}
+        ${kpiCard(ICONS_ADMIN.bolt, t('new_requests_kpi'), ps.newRequests ?? 0)}
+        ${kpiCard(ICONS_ADMIN.power, t('resolved_requests_kpi'), ps.resolvedRequests ?? 0)}
+      </div>
+
+      <strong style="display:block; margin:0 0 10px; font-size:13px; color:var(--muted);">${t('dashboard_now_section')}</strong>
+      <div class="grid grid-4" style="margin-bottom:20px;">
+        ${kpiCard(ICONS_ADMIN.building, t('active_hotels'), d.hotels.active)}
+        ${kpiCard(ICONS_ADMIN.power, t('active_users_kpi'), d.users.total)}
+        ${kpiCard(ICONS_ADMIN.guests, t('active_guests_kpi'), d.guests.active_stays)}
+        ${kpiCard(ICONS_ADMIN.star, t('avg_rating_kpi'), ps.avgRating ?? '-')}
+      </div>
+
+      <strong style="display:block; margin:0 0 2px; font-size:13px; color:var(--muted);">${t('dashboard_billing_section')}</strong>
+      <p style="color:var(--muted); font-size:11.5px; margin:0 0 10px;">${t('billing_snapshot_note')}</p>
+      <div class="grid grid-4" style="margin-bottom:20px;">
+        ${kpiCard(ICONS_ADMIN.power, t('billing_active_kpi'), billing.active ? billing.active.count : 0)}
+        ${kpiCard(ICONS_ADMIN.bolt, t('billing_overdue_kpi'), billing.overdue ? billing.overdue.count : 0)}
+        ${kpiCard(ICONS_ADMIN.clockKpi, t('billing_trial_kpi'), billing.trial ? billing.trial.count : 0)}
+        ${kpiCard(ICONS_ADMIN.building, t('billing_recorded_amount_kpi'), billing.active ? billing.active.amount.toLocaleString(LANG==='ar'?'ar-SA':'en-US') : 0)}
+      </div>
+
+      <div class="grid grid-2" style="margin-bottom:20px;">
+        <div class="card chart-card">
+          <strong style="display:block; margin-bottom:12px; font-size:13px; color:var(--muted);">${t('hotels_growth_chart_title')}</strong>
+          ${growth.length===0
+            ? `<p style="color:var(--muted); font-size:13px;">${t('no_growth_data')}</p>`
+            : growth.map(g=>chartBar(formatShortDate(g.date), g.count, maxGrowth, '--accent2')).join('')}
+        </div>
+        <div class="card">
+          <div class="row between" style="margin-bottom:12px;">
+            <strong style="font-size:13px; color:var(--muted);">${t('requires_attention_title')}</strong>
+            <span class="bc-link" style="cursor:pointer; font-size:12.5px;" onclick="staffNav('alerts')">${t('view_all_alerts')}</span>
+          </div>
+          ${topAlerts.length===0
+            ? `<p style="color:var(--muted); font-size:13px;">${t('no_alerts')}</p>`
+            : topAlerts.map(a=>`
+                <div class="list-item">
+                  <span>${escapeHtml(t('alert_'+a.type))}${a.hotelName?' · '+escapeHtml(a.hotelName):''}</span>
+                  <span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${a.severity}</span>
+                </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="row" style="gap:10px; flex-wrap:wrap;">
+        <button class="btn sm secondary" onclick="staffNav('hotels')">${t('quick_manage_hotels')}</button>
+        <button class="btn sm secondary" onclick="staffNav('alerts')">${t('quick_view_alerts')}</button>
+        <button class="btn sm secondary" onclick="staffNav('search')">${t('quick_global_search')}</button>
+      </div>
+    `;
+  },
   overview(){
     const all = getAllOpsRequests();
     const pending = all.filter(r=>r.status==='pending').length;
