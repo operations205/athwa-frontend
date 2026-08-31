@@ -139,7 +139,7 @@ label{font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:6px; 
 }
 .list-item:last-child{border-bottom:none;}
 
-/* ---------- Admin console (super_admin): KPI cards, data tables, search, breadcrumb ---------- */
+/* ---------- Admin console (platform_admin): KPI cards, data tables, search, breadcrumb ---------- */
 .kpi-card{
   background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
   padding:16px; display:flex; align-items:flex-start; gap:12px;
@@ -389,7 +389,7 @@ let ADMIN_PLATFORM_ADMINS = [];
 let ADMIN_ADD_ADMIN_OPEN = false;
 let ADMIN_SEARCH_QUERY = '';
 let ADMIN_SEARCH_RESULTS = null;
-// True while the super_admin has an open, in-progress form (creating a hotel
+// True while the platform_admin has an open, in-progress form (creating a hotel
 // on the list page, or the dedicated per-hotel settings page). The 6s
 // background poll (refreshOpsData -> refreshAdminHotels) used to call
 // staffRender() unconditionally, which re-renders the ENTIRE current page
@@ -409,7 +409,7 @@ async function refreshAdminHotels(){
     const qs = ADMIN_HOTELS_SHOW_ARCHIVED ? '?includeArchived=true' : '';
     const list = await apiCall('/api/admin/hotels'+qs, {token});
     ADMIN_HOTELS = list || [];
-    if(S.staff.loggedIn && S.staff.role==='super_admin' && !adminHotelsFormOpen()) staffRender();
+    if(S.staff.loggedIn && S.staff.role==='platform_admin' && !adminHotelsFormOpen()) staffRender();
   }catch(e){ /* silent: keep last known list on transient network errors */ }
 }
 function toggleShowArchivedHotels(){
@@ -546,7 +546,7 @@ async function refreshAdminAnalytics(){
     const token = getStaffToken();
     if(!token) return;
     ADMIN_ANALYTICS = await apiCall('/api/admin/analytics', {token});
-    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+    if(S.staff.loggedIn && S.staff.role==='platform_admin') staffRender();
   }catch(e){ /* silent */ }
 }
 function setAdminUsersHotelFilter(val){
@@ -558,7 +558,7 @@ async function refreshAdminUsers(){
     const token = getStaffToken();
     if(!token) return;
     ADMIN_USERS = await apiCall('/api/admin/users', {token}) || [];
-    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+    if(S.staff.loggedIn && S.staff.role==='platform_admin') staffRender();
   }catch(e){ /* silent */ }
 }
 async function toggleAdminUserActive(id, currentActive){
@@ -577,7 +577,7 @@ async function refreshAdminAuditLog(){
     const token = getStaffToken();
     if(!token) return;
     ADMIN_AUDIT_LOG = await apiCall('/api/admin/audit-log?limit=100', {token}) || [];
-    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+    if(S.staff.loggedIn && S.staff.role==='platform_admin') staffRender();
   }catch(e){ /* silent */ }
 }
 async function refreshAdminAlerts(){
@@ -585,7 +585,7 @@ async function refreshAdminAlerts(){
     const token = getStaffToken();
     if(!token) return;
     ADMIN_ALERTS = await apiCall('/api/admin/alerts', {token}) || [];
-    if(S.staff.loggedIn && S.staff.role==='super_admin') staffRender();
+    if(S.staff.loggedIn && S.staff.role==='platform_admin') staffRender();
   }catch(e){ /* silent */ }
 }
 async function refreshPlatformSettings(){
@@ -593,7 +593,7 @@ async function refreshPlatformSettings(){
     const token = getStaffToken();
     if(!token) return;
     ADMIN_PLATFORM_SETTINGS = await apiCall('/api/admin/settings', {token});
-    if(S.staff.loggedIn && S.staff.role==='super_admin' && STAFF_CURRENT==='settings' && !ADMIN_ADD_ADMIN_OPEN) staffRender();
+    if(S.staff.loggedIn && S.staff.role==='platform_admin' && STAFF_CURRENT==='settings' && !ADMIN_ADD_ADMIN_OPEN) staffRender();
   }catch(e){ /* silent */ }
 }
 async function refreshPlatformAdmins(){
@@ -601,7 +601,7 @@ async function refreshPlatformAdmins(){
     const token = getStaffToken();
     if(!token) return;
     ADMIN_PLATFORM_ADMINS = await apiCall('/api/admin/platform-admins', {token}) || [];
-    if(S.staff.loggedIn && S.staff.role==='super_admin' && STAFF_CURRENT==='settings' && !ADMIN_ADD_ADMIN_OPEN) staffRender();
+    if(S.staff.loggedIn && S.staff.role==='platform_admin' && STAFF_CURRENT==='settings' && !ADMIN_ADD_ADMIN_OPEN) staffRender();
   }catch(e){ /* silent */ }
 }
 function toggleAddPlatformAdminForm(){
@@ -684,11 +684,11 @@ function staffRenderSearchResultsOnly(){
 }
 async function refreshOpsData(){
   try{
-    // super_admin has no hotel scope - it manages hotels platform-wide, not
+    // platform_admin has no hotel scope - it manages hotels platform-wide, not
     // a single hotel's requests/feedback/prearrivals (those endpoints are
     // 403'd for this role server-side), so poll whichever admin section is
     // currently on screen instead.
-    if(S.staff.loggedIn && getStaffToken() && S.staff.role==='super_admin'){
+    if(S.staff.loggedIn && getStaffToken() && S.staff.role==='platform_admin'){
       if(STAFF_CURRENT==='analytics') await refreshAdminAnalytics();
       else if(STAFF_CURRENT==='users') await refreshAdminUsers();
       else if(STAFF_CURRENT==='audit') await refreshAdminAuditLog();
@@ -779,7 +779,7 @@ const DICT = {
     portal_owner:"مالك الفندق", portal_owner_desc:"نظرة عامة على الأداء",
     portal_manager:"مدير الفندق", portal_manager_desc:"إدارة العمليات اليومية",
     portal_dept:"مدير قسم", portal_dept_desc:"متابعة طلبات قسمك",
-    role_owner:"مالك الفندق", role_manager:"مدير الفندق", role_dept:"مدير قسم", role_super_admin:"مسؤول المنصة",
+    role_owner:"مالك الفندق", role_manager:"مدير الفندق", role_dept:"مدير قسم", role_platform_admin:"مسؤول المنصة",
     staff_nav_hotels:"إدارة الفنادق",
     platform_admin_login:"دخول كمسؤول المنصة", admin_email:"البريد الإلكتروني", back_to_login:"رجوع لتسجيل الدخول العادي",
     platform_overview:"نظرة عامة على المنصة",
@@ -898,7 +898,7 @@ const DICT = {
     portal_owner:"Hotel Owner", portal_owner_desc:"Performance overview",
     portal_manager:"Hotel Manager", portal_manager_desc:"Manage daily operations",
     portal_dept:"Department Manager", portal_dept_desc:"Track your department's requests",
-    role_owner:"Hotel Owner", role_manager:"Hotel Manager", role_dept:"Department Manager", role_super_admin:"Platform Admin",
+    role_owner:"Hotel Owner", role_manager:"Hotel Manager", role_dept:"Department Manager", role_platform_admin:"Platform Admin",
     staff_nav_hotels:"Manage Hotels",
     platform_admin_login:"Platform Admin Login", admin_email:"Email", back_to_login:"Back to regular login",
     platform_overview:"Platform Overview",
@@ -970,7 +970,7 @@ const DICT = {
 };
 let LANG = localStorage.getItem('karam_lang') || 'ar';
 function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
-// Maps a raw DB role ('owner'|'manager'|'dept_manager'|'staff'|'super_admin')
+// Maps a raw DB role ('owner'|'manager'|'dept_manager'|'staff'|'platform_admin')
 // to its display label. dept_manager/staff share the 'role_dept' label since
 // the DICT only distinguishes owner/manager/department-level/platform roles.
 function roleLabel(role){
@@ -1151,7 +1151,7 @@ function buildNav(){
   const bottomnav = document.getElementById('bottomnav');
   sidenav.innerHTML=''; bottomnav.innerHTML='';
   // Department items (reception, dining, spa, ...) are hidden per-hotel via
-  // the super_admin "manage hotel" toggle; non-department items (dashboard,
+  // the platform_admin "manage hotel" toggle; non-department items (dashboard,
   // messages, offers, ...) always show. Falls back to showing everything if
   // this guest logged in before enabledDepartments existed (undefined = no filter).
   const enabled = S.guest && S.guest.enabledDepartments;
@@ -1917,7 +1917,7 @@ async function adminLogin(btn){
     return;
   }
   setStaffToken(res.token);
-  S.staff = {loggedIn:true, role:'super_admin', dept:null, name:res.user.name, adminScope:res.user.adminScope||'full'};
+  S.staff = {loggedIn:true, role:'platform_admin', dept:null, name:res.user.name, adminScope:res.user.adminScope||'full'};
   saveState();
   document.getElementById('login-screen').style.display='none';
   document.getElementById('staff-app').classList.add('active');
@@ -1958,16 +1958,16 @@ const STAFF_NAV_BY_ROLE = {
   owner:['overview','requests','prearrivals','feedback'],
   manager:['overview','requests','prearrivals','feedback'],
   dept:['requests'],
-  super_admin:['hotels','analytics','users','audit','alerts','search','settings'],
+  platform_admin:['hotels','analytics','users','audit','alerts','search','settings'],
 };
 // The fixed set of guest/staff department modules the app ships with - kept
 // in sync with ALL_DEPARTMENTS in the backend's routes-hotels.js. Used to
-// build the per-hotel department-toggle checklist in the super_admin "edit
+// build the per-hotel department-toggle checklist in the platform_admin "edit
 // hotel" panel.
 const ALL_DEPARTMENTS = ['reception','dining','housekeeping','maintenance','laundry','concierge','spa','taxi','entertainment','billing'];
 function defaultStaffPage(role){
   if(role==='dept') return 'requests';
-  if(role==='super_admin') return 'hotels';
+  if(role==='platform_admin') return 'hotels';
   return 'overview';
 }
 let STAFF_CURRENT = 'overview';
@@ -1993,7 +1993,7 @@ function staffNav(key){
   const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
   // Fetch the newly-selected admin section immediately instead of waiting up
   // to 6s for the next poll tick, so switching tabs feels instant.
-  if(S.staff.loggedIn && S.staff.role==='super_admin'){
+  if(S.staff.loggedIn && S.staff.role==='platform_admin'){
     if(key==='analytics') refreshAdminAnalytics();
     else if(key==='users') refreshAdminUsers();
     else if(key==='audit') refreshAdminAuditLog();
