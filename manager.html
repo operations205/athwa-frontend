@@ -334,7 +334,20 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 window.ATHWA_ENTRY = 'unified';
 
 /* ---------------- ATHWA live backend client ---------------- */
-const API_BASE = 'https://athwa-backend-943m.onrender.com';
+// The same 6 HTML files are deployed unchanged to both the staging static
+// site and the production static site (that's the whole point - byte-
+// identical files, so what's tested on staging is exactly what ships). That
+// means API_BASE can't be a single hardcoded URL: it has to resolve to
+// whichever backend belongs to the environment this page is actually being
+// served from, or staging silently talks to production (or gets blocked by
+// production's stricter CORS/CSP, which is what surfaced this).
+const API_BASE = (function(){
+  const map = {
+    'athwa-app-staging.onrender.com': 'https://athwa-backend-staging.onrender.com',
+    'athwa-app-utex.onrender.com': 'https://athwa-backend-943m.onrender.com',
+  };
+  return map[location.hostname] || 'https://athwa-backend-943m.onrender.com';
+})();
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
 function getGuestToken(){ return localStorage.getItem('athwa_guest_token'); }
 function setGuestToken(tok){ if(tok) localStorage.setItem('athwa_guest_token', tok); else localStorage.removeItem('athwa_guest_token'); }
