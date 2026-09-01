@@ -334,7 +334,7 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 window.ATHWA_ENTRY = 'unified';
 
 /* ---------------- ATHWA live backend client ---------------- */
-const API_BASE = 'https://athwa-backend-staging.onrender.com';
+const API_BASE = 'https://athwa-backend-943m.onrender.com';
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
 function getGuestToken(){ return localStorage.getItem('athwa_guest_token'); }
 function setGuestToken(tok){ if(tok) localStorage.setItem('athwa_guest_token', tok); else localStorage.removeItem('athwa_guest_token'); }
@@ -494,6 +494,21 @@ async function bulkHotelsAction(action){
     : t('bulk_action_partial').replace('{ok}', okCount).replace('{fail}', failCount));
 }
 let ADMIN_SETTINGS_HOTEL_ID = null;
+// Hotel profile page: which of the 14 tabs is active, and lazily-loaded
+// per-tab drill-down data (guests/requests/feedback/facilities/audit are
+// each fetched only once per tab-visit per hotel, not all up front - most
+// platform_admin visits only look at 1-2 tabs, so this avoids 5 API calls
+// for a hotel someone is just glancing at). Reset whenever a different
+// hotel is opened (see openHotelSettings below).
+let ADMIN_HOTEL_PROFILE_TAB = 'overview';
+let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null };
+const HOTEL_PROFILE_TABS = [
+  ['overview','hp_tab_overview'], ['identity','hp_tab_identity'], ['departments','hp_tab_departments'],
+  ['billing','hp_tab_billing'], ['integration','hp_tab_integration'], ['staff','hp_tab_staff'],
+  ['guests','hp_tab_guests'], ['requests','hp_tab_requests'], ['feedback','hp_tab_feedback'],
+  ['facilities','hp_tab_facilities'], ['audit','hp_tab_audit'], ['alerts','hp_tab_alerts'],
+  ['links','hp_tab_links'], ['danger','hp_tab_danger'],
+];
 let ADMIN_CREATE_HOTEL_OPEN = false;
 let ADMIN_ANALYTICS = null;
 let ADMIN_DASHBOARD = null;
@@ -580,54 +595,102 @@ async function toggleHotelActive(id, currentActive){
 // hotel from the list). ADMIN_HOTELS must already contain this hotel's row.
 function openHotelSettings(id){
   ADMIN_SETTINGS_HOTEL_ID = id;
+  ADMIN_HOTEL_PROFILE_TAB = 'overview';
+  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null };
   STAFF_CURRENT = 'hotel-settings';
   buildStaffNav();
   staffRender();
   const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
+  // Overview and Staff tabs read from the platform-wide analytics/users
+  // lists rather than their own dedicated endpoints (that data already
+  // exists there, per-hotel) - refresh both so those two tabs aren't empty
+  // if this platform_admin hasn't visited the Dashboard/Users pages yet.
+  refreshAdminAnalytics();
+  refreshAdminUsers();
+  refreshAdminAlerts();
 }
 function closeHotelSettings(){
   ADMIN_SETTINGS_HOTEL_ID = null;
   staffNav('hotels');
 }
-async function submitHotelSettings(id, btn){
-  const val = (elId) => { const el = document.getElementById(elId); return el ? el.value.trim() : ''; };
-  const name = val('hs-name');
-  if(!name){ toast(LANG==='ar'?'اسم الفندق مطلوب':'Hotel name is required'); return; }
-  const enabledDepartments = ALL_DEPARTMENTS.filter(d=>{
-    const el = document.getElementById('hs-dept-'+d);
-    return el && el.checked;
-  });
-  const conciergeEl = document.getElementById('hs-concierge-enabled');
-  const conciergeEnabled = !!(conciergeEl && conciergeEl.checked);
-  const billingAmountRaw = val('hs-billing-amount');
-  const body = {
-    name,
-    enabledDepartments,
-    conciergeEnabled,
-    currency: val('hs-currency') || undefined,
-    timezone: val('hs-timezone') || undefined,
-    checkinTime: val('hs-checkin') || undefined,
-    checkoutTime: val('hs-checkout') || undefined,
-    contactPhone: val('hs-phone'),
-    contactWhatsapp: val('hs-whatsapp'),
-    logoUrl: val('hs-logo'),
-    plan: val('hs-plan') || undefined,
-    billingStatus: val('hs-billing-status') || undefined,
-    billingAmount: billingAmountRaw ? Number(billingAmountRaw) : null,
-    billingNextDue: val('hs-billing-next-due') || null,
-    billingNotes: val('hs-billing-notes'),
-  };
+function setHotelProfileTab(tab){
+  ADMIN_HOTEL_PROFILE_TAB = tab;
+  staffRender();
+  const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
+  loadHotelProfileTabData(tab);
+}
+// Lazy per-tab fetch for the four hotel-scoped drill-down endpoints plus the
+// hotel-filtered audit log. No-ops if already loaded for this hotel, or if
+// the tab doesn't need a dedicated fetch (overview/staff/alerts reuse
+// already-fetched platform-wide data, filtered client-side).
+async function loadHotelProfileTabData(tab){
+  const h = ADMIN_HOTELS.find(x=>x.id===ADMIN_SETTINGS_HOTEL_ID);
+  if(!h) return;
+  const token = getStaffToken();
+  const key = tab==='audit' ? 'auditLog' : tab;
+  if(!['guests','requests','feedback','facilities','audit'].includes(tab)) return;
+  if(ADMIN_HOTEL_PROFILE_DATA[key] !== null) return;
+  try{
+    const path = tab==='audit' ? `/api/admin/audit-log?hotelId=${h.id}&limit=100` : `/api/admin/hotels/${h.id}/${tab}`;
+    ADMIN_HOTEL_PROFILE_DATA[key] = await apiCall(path, {token}) || [];
+    if(STAFF_CURRENT==='hotel-settings' && ADMIN_HOTEL_PROFILE_TAB===tab) staffRender();
+  }catch(e){ ADMIN_HOTEL_PROFILE_DATA[key] = []; /* empty state rather than an infinite loading spinner */ }
+}
+// Each hotel-profile settings tab (Identity/Departments/Billing/Integration)
+// saves independently with its own small PATCH - since the tabbed page only
+// ever has ONE tab's fields in the DOM at a time (staffRender() rebuilds the
+// whole page on every tab switch), a single shared save-everything function
+// would silently wipe out fields that aren't currently rendered. The backend
+// PATCH already treats every field as optional (COALESCE), so a partial body
+// here is exactly as safe as the old all-in-one submit was.
+function hpVal(elId){ const el = document.getElementById(elId); return el ? el.value.trim() : ''; }
+async function hpSaveField(id, btn, body, okMsg){
   const origText = btn.textContent; btn.disabled = true;
   try{
     const token = getStaffToken();
     await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body});
-    toast(t('hotel_updated_ok'));
+    toast(okMsg || t('hotel_updated_ok'));
     await refreshAdminHotels();
   }catch(e){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }finally{
     btn.disabled = false; btn.textContent = origText;
   }
+}
+async function submitHotelIdentity(id, btn){
+  const name = hpVal('hs-name');
+  if(!name){ toast(LANG==='ar'?'اسم الفندق مطلوب':'Hotel name is required'); return; }
+  await hpSaveField(id, btn, {
+    name,
+    currency: hpVal('hs-currency') || undefined,
+    timezone: hpVal('hs-timezone') || undefined,
+    checkinTime: hpVal('hs-checkin') || undefined,
+    checkoutTime: hpVal('hs-checkout') || undefined,
+    contactPhone: hpVal('hs-phone'),
+    contactWhatsapp: hpVal('hs-whatsapp'),
+    logoUrl: hpVal('hs-logo'),
+  });
+}
+async function submitHotelDepartments(id, btn){
+  const enabledDepartments = ALL_DEPARTMENTS.filter(d=>{
+    const el = document.getElementById('hs-dept-'+d);
+    return el && el.checked;
+  });
+  await hpSaveField(id, btn, { enabledDepartments });
+}
+async function submitHotelIntegration(id, btn){
+  const conciergeEl = document.getElementById('hs-concierge-enabled');
+  await hpSaveField(id, btn, { conciergeEnabled: !!(conciergeEl && conciergeEl.checked) });
+}
+async function submitHotelBilling(id, btn){
+  const billingAmountRaw = hpVal('hs-billing-amount');
+  await hpSaveField(id, btn, {
+    plan: hpVal('hs-plan') || undefined,
+    billingStatus: hpVal('hs-billing-status') || undefined,
+    billingAmount: billingAmountRaw ? Number(billingAmountRaw) : null,
+    billingNextDue: hpVal('hs-billing-next-due') || null,
+    billingNotes: hpVal('hs-billing-notes'),
+  });
 }
 async function markHotelPaid(id){
   try{
@@ -958,6 +1021,16 @@ const DICT = {
     confirm_deactivate_user:"هل تريد تعطيل حساب هذا المستخدم؟", confirm_activate_user:"هل تريد تفعيل حساب هذا المستخدم؟",
     audit_log_title:"سجل التدقيق", no_audit_yet:"لا يوجد سجل بعد", col_actor:"المستخدم", col_action:"الإجراء", col_time:"الوقت",
     col_status:"الحالة", col_departments:"الأقسام", col_user:"المستخدم", col_role:"الصلاحية", col_target:"الهدف", col_when:"الوقت",
+    col_room:"الغرفة", col_guest:"النزيل", col_department:"القسم", col_comment:"التعليق", col_name:"الاسم", col_type:"النوع",
+    copy_label:"نسخ", copied_label:"تم النسخ",
+    hp_tab_overview:"نظرة عامة", hp_tab_identity:"الهوية والعلامة", hp_tab_departments:"الأقسام", hp_tab_billing:"الفوترة والباقة",
+    hp_tab_integration:"تكامل النظام", hp_tab_staff:"الموظفون", hp_tab_guests:"النزلاء الحاليون", hp_tab_requests:"الطلبات",
+    hp_tab_feedback:"التقييمات", hp_tab_facilities:"المرافق", hp_tab_audit:"سجل التدقيق", hp_tab_alerts:"التنبيهات",
+    hp_tab_links:"روابط سريعة", hp_tab_danger:"منطقة الخطر",
+    hp_no_guests:"لا يوجد نزلاء حاليون", hp_no_requests:"لا توجد طلبات", hp_no_feedback:"لا توجد تقييمات",
+    hp_no_facilities:"لا توجد مرافق", hp_no_audit:"لا يوجد سجل تدقيق لهذا الفندق", hp_no_alerts:"لا توجد تنبيهات لهذا الفندق",
+    hp_guest_staff_link:"رابط دخول الفندق (نزلاء وموظفون)",
+    hp_danger_note:"هذه الإجراءات تؤثر على قدرة موظفي ونزلاء هذا الفندق على الدخول للنظام.",
     search_hotels_ph:"ابحث عن فندق...", search_users_ph:"ابحث عن مستخدم...", search_audit_ph:"ابحث في السجل...",
     col_plan:"الباقة", col_billing:"حالة الدفع", billing_section:"الفوترة والاشتراك",
     setting_plan:"نوع الباقة", setting_billing_status:"حالة الدفع", setting_billing_amount:"قيمة الفاتورة",
@@ -1094,6 +1167,16 @@ const DICT = {
     per_hotel_breakdown:"Per-Hotel Breakdown",
     platform_users_title:"Platform Users", filter_all_hotels:"All Hotels", col_hotel:"Hotel", no_users_yet:"No users yet",
     col_status:"Status", col_departments:"Departments", col_user:"User", col_role:"Role", col_target:"Target", col_when:"When",
+    col_room:"Room", col_guest:"Guest", col_department:"Department", col_comment:"Comment", col_name:"Name", col_type:"Type",
+    copy_label:"Copy", copied_label:"Copied",
+    hp_tab_overview:"Overview", hp_tab_identity:"Identity & Brand", hp_tab_departments:"Departments", hp_tab_billing:"Billing & Plan",
+    hp_tab_integration:"System Integration", hp_tab_staff:"Staff", hp_tab_guests:"Current Guests", hp_tab_requests:"Requests",
+    hp_tab_feedback:"Feedback", hp_tab_facilities:"Facilities", hp_tab_audit:"Audit Log", hp_tab_alerts:"Alerts",
+    hp_tab_links:"Quick Links", hp_tab_danger:"Danger Zone",
+    hp_no_guests:"No current guests", hp_no_requests:"No requests", hp_no_feedback:"No feedback yet",
+    hp_no_facilities:"No facilities", hp_no_audit:"No audit entries for this hotel", hp_no_alerts:"No alerts for this hotel",
+    hp_guest_staff_link:"Hotel sign-in link (guests & staff)",
+    hp_danger_note:"These actions affect whether this hotel's staff and guests can sign in to the system.",
     search_hotels_ph:"Search hotels...", search_users_ph:"Search users...", search_audit_ph:"Search audit log...",
     col_plan:"Plan", col_billing:"Billing Status", billing_section:"Billing & Subscription",
     setting_plan:"Plan", setting_billing_status:"Billing Status", setting_billing_amount:"Invoice Amount",
@@ -2386,6 +2469,300 @@ function formatShortDate(iso){
   return d.toLocaleDateString(LANG==='ar'?'ar-SA':'en-US', {month:'short', day:'numeric'});
 }
 
+/* ---------------- Hotel profile page: 14 tabs ---------------- */
+function hpTabsBar(){
+  return `<div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+    ${HOTEL_PROFILE_TABS.map(([key,labelKey])=>`
+      <button class="btn sm ${ADMIN_HOTEL_PROFILE_TAB===key?'':'secondary'}" onclick="setHotelProfileTab('${key}')">${t(labelKey)}</button>
+    `).join('')}
+  </div>`;
+}
+function hpEmptyState(loaded, msgKey){
+  if(loaded===null) return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  if(loaded.length===0) return `<div class="card"><p style="color:var(--muted)">${t(msgKey)}</p></div>`;
+  return null;
+}
+function hpOverviewTab(h){
+  const row = ADMIN_ANALYTICS ? ADMIN_ANALYTICS.perHotel.find(x=>x.id===h.id) : null;
+  if(!row){
+    return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  }
+  return `
+    <div class="grid grid-3" style="margin-bottom:14px;">
+      ${kpiCard(ICONS_ADMIN.guests, t('active_guests_kpi'), row.active_guests)}
+      ${kpiCard(ICONS_ADMIN.bolt, t('open_requests_kpi'), row.open_requests)}
+      ${kpiCard(ICONS_ADMIN.star, t('avg_rating_kpi'), row.avg_rating ?? '-')}
+    </div>
+    <div class="grid grid-3" style="margin-bottom:16px;">
+      ${kpiCard(STAFF_ICONS.users, t('active_staff_kpi'), row.staff_count)}
+      ${kpiCard(STAFF_ICONS.hotels, t('col_status'), h.archived_at ? t('status_archived') : (h.active?t('status_active'):t('status_inactive')))}
+      ${kpiCard(ICONS_ADMIN.building, t('col_departments'), `${(h.enabled_departments||[]).length}/${ALL_DEPARTMENTS.length}`)}
+    </div>
+    <div class="card">
+      <strong style="display:block; margin-bottom:8px;">${t('col_plan')} · ${t('col_billing')}</strong>
+      <p style="color:var(--muted); font-size:13.5px; margin:0;">
+        ${t('plan_'+(h.plan||'standard'))} · ${t('billing_'+(h.billing_status||'active'))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
+      </p>
+    </div>
+  `;
+}
+function hpIdentityTab(h){
+  return `
+    <div class="card">
+      <div class="grid grid-2">
+        <div class="field"><label>${t('hotel_display_name')}</label><input id="hs-name" value="${escapeHtml(h.name)}"></div>
+        <div class="field"><label>${t('setting_currency')}</label><input id="hs-currency" value="${escapeHtml(h.currency||'SAR')}" placeholder="SAR"></div>
+        <div class="field"><label>${t('setting_timezone')}</label><input id="hs-timezone" value="${escapeHtml(h.timezone||'Asia/Riyadh')}" placeholder="Asia/Riyadh"></div>
+        <div class="field"><label>${t('setting_checkin')}</label><input id="hs-checkin" value="${escapeHtml(h.checkin_time||'15:00')}" placeholder="15:00"></div>
+        <div class="field"><label>${t('setting_checkout')}</label><input id="hs-checkout" value="${escapeHtml(h.checkout_time||'12:00')}" placeholder="12:00"></div>
+        <div class="field"><label>${t('setting_phone')}</label><input id="hs-phone" value="${escapeHtml(h.contact_phone||'')}" placeholder="+966 5X XXX XXXX"></div>
+        <div class="field"><label>${t('setting_whatsapp')}</label><input id="hs-whatsapp" value="${escapeHtml(h.contact_whatsapp||'')}" placeholder="+966 5X XXX XXXX"></div>
+        <div class="field"><label>${t('setting_logo_url')}</label><input id="hs-logo" value="${escapeHtml(h.logo_url||'')}" placeholder="https://..."></div>
+      </div>
+      <button class="btn" onclick="submitHotelIdentity(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+function hpDepartmentsTab(h){
+  const enabled = h.enabled_departments || [];
+  return `
+    <div class="card">
+      <div class="grid grid-2" style="margin-bottom:14px;">
+        ${ALL_DEPARTMENTS.map(d=>`
+          <label class="row" style="gap:6px; font-size:13.5px;">
+            <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
+            <span>${t('nav_'+d)}</span>
+          </label>
+        `).join('')}
+      </div>
+      <button class="btn" onclick="submitHotelDepartments(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+function hpBillingTab(h){
+  return `
+    <div class="card">
+      <div class="row between" style="margin-bottom:12px;">
+        <strong>${t('billing_section')}</strong>
+        <button class="btn sm secondary" onclick="markHotelPaid(${h.id})">${t('mark_as_paid')}</button>
+      </div>
+      <div class="grid grid-2">
+        <div class="field"><label>${t('setting_plan')}</label>
+          <select id="hs-plan">
+            ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${(h.plan||'standard')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>${t('setting_billing_status')}</label>
+          <select id="hs-billing-status">
+            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>${t('setting_billing_amount')}</label><input id="hs-billing-amount" type="number" step="0.01" min="0" value="${h.billing_amount!=null?h.billing_amount:''}"></div>
+        <div class="field"><label>${t('setting_billing_next_due')}</label><input id="hs-billing-next-due" type="date" value="${h.billing_next_due ? String(h.billing_next_due).slice(0,10) : ''}"></div>
+      </div>
+      <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
+      <button class="btn" onclick="submitHotelBilling(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+function hpIntegrationTab(h){
+  return `
+    <div class="card">
+      <label class="row" style="gap:8px; font-size:14px; margin-bottom:14px;">
+        <input type="checkbox" id="hs-concierge-enabled" ${h.concierge_enabled!==false?'checked':''}>
+        <span>${t('setting_concierge_enabled')}</span>
+      </label>
+      <button class="btn" onclick="submitHotelIntegration(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+function hpStaffTab(h){
+  const list = ADMIN_USERS.filter(u=>String(u.hotel_id)===String(h.id));
+  const empty = hpEmptyState(ADMIN_USERS===null ? null : list, 'no_users_yet');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_user')}</th><th>${t('col_role')}</th><th>${t('col_status')}</th><th></th></tr></thead>
+        <tbody>
+          ${list.map(u=>`
+            <tr>
+              <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
+              <td>${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''}</td>
+              <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
+              <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpGuestsTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.guests;
+  const empty = hpEmptyState(data, 'hp_no_guests');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_room')}</th><th>${t('col_guest')}</th><th>${t('col_status')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(g=>`
+            <tr>
+              <td>${escapeHtml(g.room_number)}</td>
+              <td>${escapeHtml(g.name)}</td>
+              <td><span class="pill ${g.active?'':'danger'}">${g.active?t('status_active'):t('status_inactive')}</span></td>
+              <td>${g.created_at ? new Date(g.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpRequestsTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.requests;
+  const empty = hpEmptyState(data, 'hp_no_requests');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_room')}</th><th>${t('col_department')}</th><th>${t('col_status')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(r=>`
+            <tr>
+              <td>${escapeHtml(r.room_number||'-')}</td>
+              <td>${t('nav_'+r.department)}</td>
+              <td><span class="pill">${r.status}</span></td>
+              <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpFeedbackTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.feedback;
+  const empty = hpEmptyState(data, 'hp_no_feedback');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_room')}</th><th>${t('avg_rating_kpi')}</th><th>${t('col_comment')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(f=>`
+            <tr>
+              <td>${escapeHtml(f.room_number||'-')}</td>
+              <td>${f.rating!=null?('★ '+f.rating):'-'}</td>
+              <td>${escapeHtml(f.comment||'-')}</td>
+              <td>${f.created_at ? new Date(f.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpFacilitiesTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.facilities;
+  const empty = hpEmptyState(data, 'hp_no_facilities');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_name')}</th><th>${t('col_type')}</th><th>${t('col_status')}</th></tr></thead>
+        <tbody>
+          ${data.map(f=>`
+            <tr>
+              <td>${escapeHtml(f.name)}</td>
+              <td>${escapeHtml(f.type)}</td>
+              <td><span class="pill ${f.active?'':'danger'}">${f.active?t('status_active'):t('status_inactive')}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpAuditTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.auditLog;
+  const empty = hpEmptyState(data, 'hp_no_audit');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_action')}</th><th>${t('col_actor')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(a=>`
+            <tr>
+              <td>${escapeHtml(a.action)}</td>
+              <td>${escapeHtml(a.actor_name||a.actor_type)}</td>
+              <td>${a.created_at ? new Date(a.created_at).toLocaleString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpAlertsTab(h){
+  const data = (ADMIN_ALERTS||[]).filter(a=>String(a.hotelId)===String(h.id));
+  if(data.length===0) return `<div class="card"><p style="color:var(--muted)">${t('hp_no_alerts')}</p></div>`;
+  return `
+    <div class="card">
+      ${data.map(a=>`
+        <div class="list-item">
+          <span><span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${t('alert_'+a.type)}</span></span>
+          <span style="color:var(--muted); font-size:12px;">${escapeHtml(JSON.stringify(a.meta||{}))}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function hpLinksTab(h){
+  const guestLink = `${location.origin}/?hotel=${encodeURIComponent(h.slug)}`;
+  return `
+    <div class="card">
+      <div class="field">
+        <label>${t('hp_guest_staff_link')}</label>
+        <div class="row" style="gap:8px;">
+          <input id="hp-link-input" value="${escapeHtml(guestLink)}" readonly>
+          <button class="btn sm secondary" onclick="navigator.clipboard.writeText(document.getElementById('hp-link-input').value); toast(t('copied_label'))">${t('copy_label')}</button>
+        </div>
+      </div>
+      ${h.contact_whatsapp ? `<p style="font-size:13.5px; color:var(--muted);">${t('setting_whatsapp')}: <a href="https://wa.me/${escapeHtml(h.contact_whatsapp.replace(/[^0-9]/g,''))}" target="_blank" rel="noopener">${escapeHtml(h.contact_whatsapp)}</a></p>` : ''}
+      ${h.contact_phone ? `<p style="font-size:13.5px; color:var(--muted);">${t('setting_phone')}: <a href="tel:${escapeHtml(h.contact_phone)}">${escapeHtml(h.contact_phone)}</a></p>` : ''}
+    </div>
+  `;
+}
+function hpDangerTab(h){
+  const isArchived = !!h.archived_at;
+  return `
+    <div class="card">
+      <div class="row" style="gap:8px; flex-wrap:wrap;">
+        <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+        ${isArchived
+          ? `<button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>`
+          : `<button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>`}
+      </div>
+      <p style="color:var(--muted); font-size:12.5px; margin-top:12px;">${t('hp_danger_note')}</p>
+    </div>
+  `;
+}
+function hpTabContent(h){
+  switch(ADMIN_HOTEL_PROFILE_TAB){
+    case 'identity': return hpIdentityTab(h);
+    case 'departments': return hpDepartmentsTab(h);
+    case 'billing': return hpBillingTab(h);
+    case 'integration': return hpIntegrationTab(h);
+    case 'staff': return hpStaffTab(h);
+    case 'guests': return hpGuestsTab(h);
+    case 'requests': return hpRequestsTab(h);
+    case 'feedback': return hpFeedbackTab(h);
+    case 'facilities': return hpFacilitiesTab(h);
+    case 'audit': return hpAuditTab(h);
+    case 'alerts': return hpAlertsTab(h);
+    case 'links': return hpLinksTab(h);
+    case 'danger': return hpDangerTab(h);
+    default: return hpOverviewTab(h);
+  }
+}
+
 /* ---------------- Staff renderers ---------------- */
 const STAFF_RENDERERS = {
   dashboard(){
@@ -2628,72 +3005,15 @@ const STAFF_RENDERERS = {
       return `${pageHead(t('hotel_settings'))}<div class="card"><p style="color:var(--muted)">${t('no_hotels_yet')}</p></div>
         <button class="btn sm secondary" onclick="closeHotelSettings()">${t('back_to_hotels')}</button>`;
     }
-    const enabled = h.enabled_departments || [];
     return `
       ${breadcrumb([
         {label: t('staff_nav_hotels'), onclick:'closeHotelSettings()'},
         {label: escapeHtml(h.name)},
       ])}
       ${pageHead(t('hotel_settings'), escapeHtml(h.name) + ' · ' + escapeHtml(h.slug))}
-
-      <div class="card" style="margin-bottom:16px;">
-        <strong style="display:block; margin-bottom:12px;">${t('hotel_identity_section')}</strong>
-        <div class="grid grid-2">
-          <div class="field"><label>${t('hotel_display_name')}</label><input id="hs-name" value="${escapeHtml(h.name)}"></div>
-          <div class="field"><label>${t('setting_currency')}</label><input id="hs-currency" value="${escapeHtml(h.currency||'SAR')}" placeholder="SAR"></div>
-          <div class="field"><label>${t('setting_timezone')}</label><input id="hs-timezone" value="${escapeHtml(h.timezone||'Asia/Riyadh')}" placeholder="Asia/Riyadh"></div>
-          <div class="field"><label>${t('setting_checkin')}</label><input id="hs-checkin" value="${escapeHtml(h.checkin_time||'15:00')}" placeholder="15:00"></div>
-          <div class="field"><label>${t('setting_checkout')}</label><input id="hs-checkout" value="${escapeHtml(h.checkout_time||'12:00')}" placeholder="12:00"></div>
-          <div class="field"><label>${t('setting_phone')}</label><input id="hs-phone" value="${escapeHtml(h.contact_phone||'')}" placeholder="+966 5X XXX XXXX"></div>
-          <div class="field"><label>${t('setting_whatsapp')}</label><input id="hs-whatsapp" value="${escapeHtml(h.contact_whatsapp||'')}" placeholder="+966 5X XXX XXXX"></div>
-          <div class="field"><label>${t('setting_logo_url')}</label><input id="hs-logo" value="${escapeHtml(h.logo_url||'')}" placeholder="https://..."></div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <strong style="display:block; margin-bottom:12px;">${t('departments_section')}</strong>
-        <div class="grid grid-2">
-          ${ALL_DEPARTMENTS.map(d=>`
-            <label class="row" style="gap:6px; font-size:13.5px;">
-              <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
-              <span>${t('nav_'+d)}</span>
-            </label>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <strong style="display:block; margin-bottom:12px;">${t('system_integration_section')}</strong>
-        <label class="row" style="gap:8px; font-size:14px;">
-          <input type="checkbox" id="hs-concierge-enabled" ${h.concierge_enabled!==false?'checked':''}>
-          <span>${t('setting_concierge_enabled')}</span>
-        </label>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <div class="row between" style="margin-bottom:12px;">
-          <strong>${t('billing_section')}</strong>
-          <button class="btn sm secondary" onclick="markHotelPaid(${h.id})">${t('mark_as_paid')}</button>
-        </div>
-        <div class="grid grid-2">
-          <div class="field"><label>${t('setting_plan')}</label>
-            <select id="hs-plan">
-              ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${(h.plan||'standard')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field"><label>${t('setting_billing_status')}</label>
-            <select id="hs-billing-status">
-              ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field"><label>${t('setting_billing_amount')}</label><input id="hs-billing-amount" type="number" step="0.01" min="0" value="${h.billing_amount!=null?h.billing_amount:''}"></div>
-          <div class="field"><label>${t('setting_billing_next_due')}</label><input id="hs-billing-next-due" type="date" value="${h.billing_next_due ? String(h.billing_next_due).slice(0,10) : ''}"></div>
-        </div>
-        <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
-      </div>
-
-      <div class="row" style="gap:8px;">
-        <button class="btn" onclick="submitHotelSettings(${h.id}, this)">${t('save_changes')}</button>
+      ${hpTabsBar()}
+      ${hpTabContent(h)}
+      <div class="row" style="gap:8px; margin-top:16px;">
         <button class="btn secondary" onclick="closeHotelSettings()">${t('cancel')}</button>
       </div>
     `;
