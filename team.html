@@ -443,14 +443,14 @@ function getFilteredSortedHotels(){
   let list = ADMIN_HOTELS.slice();
   if(ADMIN_HOTELS_FILTER_STATUS==='active') list = list.filter(h=>h.active && !h.archived_at);
   else if(ADMIN_HOTELS_FILTER_STATUS==='inactive') list = list.filter(h=>!h.active && !h.archived_at);
-  if(ADMIN_HOTELS_FILTER_PLAN!=='all') list = list.filter(h=>(h.plan||'standard')===ADMIN_HOTELS_FILTER_PLAN);
+  if(ADMIN_HOTELS_FILTER_PLAN!=='all') list = list.filter(h=>(h.plan||'essential')===ADMIN_HOTELS_FILTER_PLAN);
   if(ADMIN_HOTELS_FILTER_BILLING!=='all') list = list.filter(h=>(h.billing_status||'active')===ADMIN_HOTELS_FILTER_BILLING);
   const dir = ADMIN_HOTELS_SORT_DIR==='asc' ? 1 : -1;
   const key = ADMIN_HOTELS_SORT_BY;
   list.sort((a,b)=>{
     let av, bv;
     if(key==='name'){ av=(a.name||'').toLowerCase(); bv=(b.name||'').toLowerCase(); }
-    else if(key==='plan'){ av=a.plan||'standard'; bv=b.plan||'standard'; }
+    else if(key==='plan'){ av=a.plan||'essential'; bv=b.plan||'essential'; }
     else if(key==='billing_status'){ av=a.billing_status||'active'; bv=b.billing_status||'active'; }
     else { av=a.created_at||''; bv=b.created_at||''; }
     if(av<bv) return -1*dir;
@@ -515,7 +515,8 @@ let ADMIN_SETTINGS_HOTEL_ID = null;
 // for a hotel someone is just glancing at). Reset whenever a different
 // hotel is opened (see openHotelSettings below).
 let ADMIN_HOTEL_PROFILE_TAB = 'overview';
-let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null };
+let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null };
+let ADMIN_PLANS = null; // catalog (essential/performance/portfolio) - loaded once, reused across hotels
 const HOTEL_PROFILE_TABS = [
   ['overview','hp_tab_overview'], ['identity','hp_tab_identity'], ['departments','hp_tab_departments'],
   ['billing','hp_tab_billing'], ['integration','hp_tab_integration'], ['staff','hp_tab_staff'],
@@ -610,7 +611,7 @@ async function toggleHotelActive(id, currentActive){
 function openHotelSettings(id){
   ADMIN_SETTINGS_HOTEL_ID = id;
   ADMIN_HOTEL_PROFILE_TAB = 'overview';
-  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null };
+  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null };
   STAFF_CURRENT = 'hotel-settings';
   buildStaffNav();
   staffRender();
@@ -622,6 +623,16 @@ function openHotelSettings(id){
   refreshAdminAnalytics();
   refreshAdminUsers();
   refreshAdminAlerts();
+  refreshAdminPlans();
+}
+async function refreshAdminPlans(){
+  if(ADMIN_PLANS !== null) return; // catalog is effectively static - fetch once per session
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_PLANS = await apiCall('/api/plans', {token}) || [];
+    if(STAFF_CURRENT==='hotel-settings') staffRender();
+  }catch(e){ /* silent - plan limits are a nice-to-have, not blocking */ }
 }
 function closeHotelSettings(){
   ADMIN_SETTINGS_HOTEL_ID = null;
@@ -641,11 +652,11 @@ async function loadHotelProfileTabData(tab){
   const h = ADMIN_HOTELS.find(x=>x.id===ADMIN_SETTINGS_HOTEL_ID);
   if(!h) return;
   const token = getStaffToken();
-  const key = tab==='audit' ? 'auditLog' : tab;
-  if(!['guests','requests','feedback','facilities','audit'].includes(tab)) return;
+  const key = tab==='audit' ? 'auditLog' : tab==='billing' ? 'invoices' : tab;
+  if(!['guests','requests','feedback','facilities','audit','billing'].includes(tab)) return;
   if(ADMIN_HOTEL_PROFILE_DATA[key] !== null) return;
   try{
-    const path = tab==='audit' ? `/api/admin/audit-log?hotelId=${h.id}&limit=100` : `/api/admin/hotels/${h.id}/${tab}`;
+    const path = tab==='audit' ? `/api/admin/audit-log?hotelId=${h.id}&limit=100` : `/api/admin/hotels/${h.id}/${key}`;
     ADMIN_HOTEL_PROFILE_DATA[key] = await apiCall(path, {token}) || [];
     if(STAFF_CURRENT==='hotel-settings' && ADMIN_HOTEL_PROFILE_TAB===tab) staffRender();
   }catch(e){ ADMIN_HOTEL_PROFILE_DATA[key] = []; /* empty state rather than an infinite loading spinner */ }
@@ -700,6 +711,7 @@ async function submitHotelBilling(id, btn){
   const billingAmountRaw = hpVal('hs-billing-amount');
   await hpSaveField(id, btn, {
     plan: hpVal('hs-plan') || undefined,
+    planRenewalDate: hpVal('hs-plan-renewal') || null,
     billingStatus: hpVal('hs-billing-status') || undefined,
     billingAmount: billingAmountRaw ? Number(billingAmountRaw) : null,
     billingNextDue: hpVal('hs-billing-next-due') || null,
@@ -1063,7 +1075,14 @@ const DICT = {
     col_plan:"الباقة", col_billing:"حالة الدفع", billing_section:"الفوترة والاشتراك",
     setting_plan:"نوع الباقة", setting_billing_status:"حالة الدفع", setting_billing_amount:"قيمة الفاتورة",
     setting_billing_next_due:"تاريخ الاستحقاق القادم", setting_billing_notes:"ملاحظات الفوترة",
-    plan_standard:"أساسية", plan_premium:"مميزة", plan_enterprise:"مؤسسات",
+    plan_essential:"أساسية", plan_performance:"احترافية", plan_portfolio:"المحفظة",
+    setting_plan_renewal:"تاريخ تجديد الاشتراك",
+    invoices_section:"سجل الفواتير", add_invoice:"إضافة فاتورة", invoice_amount:"القيمة",
+    invoice_due_date:"تاريخ الاستحقاق", invoice_notes:"ملاحظات", invoice_status:"الحالة",
+    invoice_pending:"معلّقة", invoice_paid:"مدفوعة", invoice_overdue:"متأخرة", invoice_cancelled:"ملغاة",
+    mark_invoice_paid:"تحديد كمدفوعة", cancel_invoice:"إلغاء", no_invoices_yet:"لا توجد فواتير بعد",
+    invoice_amount_required:"القيمة مطلوبة ويجب أن تكون رقمًا موجبًا", plan_users_limit:"حد المستخدمين",
+    plan_unlimited:"غير محدود",
     billing_active:"سارية", billing_trial:"تجريبية", billing_overdue:"متأخرة الدفع", billing_suspended:"موقوفة",
     mark_as_paid:"تحديد كمدفوعة",
     staff_nav_alerts:"التنبيهات", staff_nav_search:"البحث الشامل", staff_nav_settings:"إعدادات المنصة",
@@ -1223,7 +1242,14 @@ const DICT = {
     col_plan:"Plan", col_billing:"Billing Status", billing_section:"Billing & Subscription",
     setting_plan:"Plan", setting_billing_status:"Billing Status", setting_billing_amount:"Invoice Amount",
     setting_billing_next_due:"Next Due Date", setting_billing_notes:"Billing Notes",
-    plan_standard:"Standard", plan_premium:"Premium", plan_enterprise:"Enterprise",
+    plan_essential:"Essential", plan_performance:"Performance", plan_portfolio:"Portfolio",
+    setting_plan_renewal:"Renewal Date",
+    invoices_section:"Invoice History", add_invoice:"Add Invoice", invoice_amount:"Amount",
+    invoice_due_date:"Due Date", invoice_notes:"Notes", invoice_status:"Status",
+    invoice_pending:"Pending", invoice_paid:"Paid", invoice_overdue:"Overdue", invoice_cancelled:"Cancelled",
+    mark_invoice_paid:"Mark as Paid", cancel_invoice:"Cancel", no_invoices_yet:"No invoices yet",
+    invoice_amount_required:"Amount is required and must be a positive number", plan_users_limit:"User Limit",
+    plan_unlimited:"Unlimited",
     billing_active:"Active", billing_trial:"Trial", billing_overdue:"Overdue", billing_suspended:"Suspended",
     mark_as_paid:"Mark as Paid",
     staff_nav_alerts:"Alerts", staff_nav_search:"Global Search", staff_nav_settings:"Platform Settings",
@@ -2634,7 +2660,7 @@ function hpOverviewTab(h){
     <div class="card">
       <strong style="display:block; margin-bottom:8px;">${t('col_plan')} · ${t('col_billing')}</strong>
       <p style="color:var(--muted); font-size:13.5px; margin:0;">
-        ${t('plan_'+(h.plan||'standard'))} · ${t('billing_'+(h.billing_status||'active'))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
+        ${t('plan_'+(h.plan||'essential'))} · ${t('billing_'+(h.billing_status||'active'))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
       </p>
     </div>
   `;
@@ -2673,6 +2699,11 @@ function hpDepartmentsTab(h){
   `;
 }
 function hpBillingTab(h){
+  const plan = ADMIN_PLANS && ADMIN_PLANS.find(p=>p.slug===(h.plan||'essential'));
+  const planLimitLine = plan
+    ? `${t('plan_users_limit')}: ${plan.max_users!=null?plan.max_users:t('plan_unlimited')}`
+    : '';
+  const invoices = ADMIN_HOTEL_PROFILE_DATA.invoices;
   return `
     <div class="card">
       <div class="row between" style="margin-bottom:12px;">
@@ -2682,9 +2713,11 @@ function hpBillingTab(h){
       <div class="grid grid-2">
         <div class="field"><label>${t('setting_plan')}</label>
           <select id="hs-plan">
-            ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${(h.plan||'standard')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${(h.plan||'essential')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
           </select>
+          ${planLimitLine?`<div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(planLimitLine)}</div>`:''}
         </div>
+        <div class="field"><label>${t('setting_plan_renewal')}</label><input id="hs-plan-renewal" type="date" value="${h.plan_renewal_date ? String(h.plan_renewal_date).slice(0,10) : ''}"></div>
         <div class="field"><label>${t('setting_billing_status')}</label>
           <select id="hs-billing-status">
             ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
@@ -2696,7 +2729,83 @@ function hpBillingTab(h){
       <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
       <button class="btn" onclick="submitHotelBilling(${h.id}, this)">${t('save_changes')}</button>
     </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="row between" style="margin-bottom:12px;">
+        <strong>${t('invoices_section')}</strong>
+        <button class="btn sm secondary" onclick="showAddInvoiceForm(${h.id})">${t('add_invoice')}</button>
+      </div>
+      <div id="hp-add-invoice-form" style="display:none;margin-bottom:14px;">
+        <div class="grid grid-3">
+          <div class="field"><label>${t('invoice_amount')}</label><input id="hs-inv-amount" type="number" step="0.01" min="0"></div>
+          <div class="field"><label>${t('invoice_due_date')}</label><input id="hs-inv-due" type="date"></div>
+          <div class="field"><label>${t('invoice_notes')}</label><input id="hs-inv-notes" type="text"></div>
+        </div>
+        <button class="btn sm" onclick="submitAddInvoice(${h.id}, this)">${t('add_invoice')}</button>
+      </div>
+      ${hpInvoicesTable(h.id, invoices)}
+    </div>
   `;
+}
+function hpInvoicesTable(hotelId, invoices){
+  if(invoices===null) return `<div class="muted">${t('loading')||'...'}</div>`;
+  if(!invoices.length) return `<div class="muted">${t('no_invoices_yet')}</div>`;
+  return `
+    <table class="table">
+      <thead><tr>
+        <th>${t('invoice_amount')}</th><th>${t('invoice_due_date')}</th><th>${t('invoice_status')}</th><th>${t('invoice_notes')}</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${invoices.map(inv=>`
+          <tr>
+            <td>${inv.amount} ${inv.currency||'SAR'}</td>
+            <td>${inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
+            <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${t('invoice_'+inv.status)}</span></td>
+            <td>${escapeHtml(inv.notes||'')}</td>
+            <td>
+              ${inv.status==='pending'||inv.status==='overdue' ? `
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'paid')">${t('mark_invoice_paid')}</button>
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'cancelled')">${t('cancel_invoice')}</button>
+              ` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+function showAddInvoiceForm(hotelId){
+  const el = document.getElementById('hp-add-invoice-form');
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+async function submitAddInvoice(hotelId, btn){
+  const amountRaw = hpVal('hs-inv-amount');
+  const amount = Number(amountRaw);
+  if(!amountRaw || Number.isNaN(amount) || amount<=0){ toast(t('invoice_amount_required')); return; }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const token = getStaffToken();
+    await apiCall(`/api/admin/hotels/${hotelId}/invoices`, {method:'POST', token, body:{
+      amount, dueDate: hpVal('hs-inv-due')||undefined, notes: hpVal('hs-inv-notes')||undefined,
+    }});
+    ADMIN_HOTEL_PROFILE_DATA.invoices = null; // force refetch
+    await loadHotelProfileTabData('billing');
+    toast(t('hotel_updated_ok'));
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+async function setInvoiceStatus(hotelId, invoiceId, status){
+  try{
+    const token = getStaffToken();
+    await apiCall(`/api/admin/hotels/${hotelId}/invoices/${invoiceId}`, {method:'PATCH', token, body:{status}});
+    ADMIN_HOTEL_PROFILE_DATA.invoices = null;
+    await loadHotelProfileTabData('billing');
+    toast(t('hotel_updated_ok'));
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
 }
 function hpIntegrationTab(h){
   return `
@@ -3039,7 +3148,7 @@ const STAFF_RENDERERS = {
           <td><input type="checkbox" ${isArchived?'disabled':''} ${ADMIN_HOTELS_SELECTED.has(h.id)?'checked':''} onchange="toggleHotelSelected(${h.id}, this.checked)"></td>
           <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
           <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
-          <td>${t('plan_'+(h.plan||'standard'))}</td>
+          <td>${t('plan_'+(h.plan||'essential'))}</td>
           <td><span class="pill ${billingPillClass}">${t('billing_'+billingStatus)}</span></td>
           <td class="num">${deptCount}/${ALL_DEPARTMENTS.length}</td>
           <td>${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</td>
@@ -3096,7 +3205,7 @@ const STAFF_RENDERERS = {
           <label style="font-size:11px;">${t('filter_plan_label')}</label>
           <select onchange="setHotelsFilter('plan', this.value)">
             <option value="all" ${ADMIN_HOTELS_FILTER_PLAN==='all'?'selected':''}>${t('all_plans')}</option>
-            ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
           </select>
         </div>
         <div class="field" style="margin:0;">
