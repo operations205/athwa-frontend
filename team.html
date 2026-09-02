@@ -334,7 +334,20 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 window.ATHWA_ENTRY = 'unified';
 
 /* ---------------- ATHWA live backend client ---------------- */
-const API_BASE = 'https://athwa-backend-943m.onrender.com';
+// The same 6 HTML files are deployed unchanged to both the staging static
+// site and the production static site (that's the whole point - byte-
+// identical files, so what's tested on staging is exactly what ships). That
+// means API_BASE can't be a single hardcoded URL: it has to resolve to
+// whichever backend belongs to the environment this page is actually being
+// served from, or staging silently talks to production (or gets blocked by
+// production's stricter CORS/CSP, which is what surfaced this).
+const API_BASE = (function(){
+  const map = {
+    'athwa-app-staging.onrender.com': 'https://athwa-backend-staging.onrender.com',
+    'athwa-app-utex.onrender.com': 'https://athwa-backend-943m.onrender.com',
+  };
+  return map[location.hostname] || 'https://athwa-backend-943m.onrender.com';
+})();
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
 function getGuestToken(){ return localStorage.getItem('athwa_guest_token'); }
 function setGuestToken(tok){ if(tok) localStorage.setItem('athwa_guest_token', tok); else localStorage.removeItem('athwa_guest_token'); }
@@ -363,6 +376,7 @@ function mapBackendRequest(r){
     titleAr:r.request_type||'', titleEn:r.request_type||'',
     guestName:r.guest_name||'Guest', room:r.room_number||'-',
     staffAr:'', staffEn:'', time:r.created_at,
+    slaStatus:r.slaStatus||null, // 'on_time' | 'at_risk' | 'overdue' | null (closed requests)
   };
 }
 function mapBackendFeedback(f){
@@ -375,6 +389,17 @@ function mapBackendPrearrival(p){
 }
 const CACHE = { requests:[], feedback:[], prearrivals:[] };
 let REFRESH_TIMER = null;
+// Roadmap Phase 5 (Revenue Studio): the guest-facing catalog of hotel-defined
+// offers (room upgrades, dining add-ons, spa, etc), lazily fetched the first
+// time the guest opens the Offers tab. null = not loaded yet (show a loading
+// state); [] = loaded and genuinely empty.
+let GUEST_OFFERS = null;
+async function loadGuestOffers(){
+  try{
+    GUEST_OFFERS = await apiCall('/api/offers', {token:getGuestToken()}) || [];
+  }catch(e){ GUEST_OFFERS = []; }
+  if(CURRENT==='offers') render();
+}
 let ADMIN_HOTELS = [];
 let ADMIN_HOTELS_SHOW_ARCHIVED = false;
 // Table filters/sort - persisted to localStorage (not the main app state
@@ -429,14 +454,14 @@ function getFilteredSortedHotels(){
   let list = ADMIN_HOTELS.slice();
   if(ADMIN_HOTELS_FILTER_STATUS==='active') list = list.filter(h=>h.active && !h.archived_at);
   else if(ADMIN_HOTELS_FILTER_STATUS==='inactive') list = list.filter(h=>!h.active && !h.archived_at);
-  if(ADMIN_HOTELS_FILTER_PLAN!=='all') list = list.filter(h=>(h.plan||'standard')===ADMIN_HOTELS_FILTER_PLAN);
+  if(ADMIN_HOTELS_FILTER_PLAN!=='all') list = list.filter(h=>(h.plan||'essential')===ADMIN_HOTELS_FILTER_PLAN);
   if(ADMIN_HOTELS_FILTER_BILLING!=='all') list = list.filter(h=>(h.billing_status||'active')===ADMIN_HOTELS_FILTER_BILLING);
   const dir = ADMIN_HOTELS_SORT_DIR==='asc' ? 1 : -1;
   const key = ADMIN_HOTELS_SORT_BY;
   list.sort((a,b)=>{
     let av, bv;
     if(key==='name'){ av=(a.name||'').toLowerCase(); bv=(b.name||'').toLowerCase(); }
-    else if(key==='plan'){ av=a.plan||'standard'; bv=b.plan||'standard'; }
+    else if(key==='plan'){ av=a.plan||'essential'; bv=b.plan||'essential'; }
     else if(key==='billing_status'){ av=a.billing_status||'active'; bv=b.billing_status||'active'; }
     else { av=a.created_at||''; bv=b.created_at||''; }
     if(av<bv) return -1*dir;
@@ -494,6 +519,22 @@ async function bulkHotelsAction(action){
     : t('bulk_action_partial').replace('{ok}', okCount).replace('{fail}', failCount));
 }
 let ADMIN_SETTINGS_HOTEL_ID = null;
+// Hotel profile page: which of the 14 tabs is active, and lazily-loaded
+// per-tab drill-down data (guests/requests/feedback/facilities/audit are
+// each fetched only once per tab-visit per hotel, not all up front - most
+// platform_admin visits only look at 1-2 tabs, so this avoids 5 API calls
+// for a hotel someone is just glancing at). Reset whenever a different
+// hotel is opened (see openHotelSettings below).
+let ADMIN_HOTEL_PROFILE_TAB = 'overview';
+let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null, recoveryCases:null, revenue:null };
+let ADMIN_PLANS = null; // catalog (essential/performance/portfolio) - loaded once, reused across hotels
+const HOTEL_PROFILE_TABS = [
+  ['overview','hp_tab_overview'], ['identity','hp_tab_identity'], ['departments','hp_tab_departments'],
+  ['billing','hp_tab_billing'], ['gxi','hp_tab_gxi'], ['recovery','hp_tab_recovery'], ['revenue','hp_tab_revenue'], ['integration','hp_tab_integration'], ['staff','hp_tab_staff'],
+  ['guests','hp_tab_guests'], ['requests','hp_tab_requests'], ['feedback','hp_tab_feedback'],
+  ['facilities','hp_tab_facilities'], ['audit','hp_tab_audit'], ['alerts','hp_tab_alerts'],
+  ['links','hp_tab_links'], ['danger','hp_tab_danger'],
+];
 let ADMIN_CREATE_HOTEL_OPEN = false;
 let ADMIN_ANALYTICS = null;
 let ADMIN_DASHBOARD = null;
@@ -580,54 +621,114 @@ async function toggleHotelActive(id, currentActive){
 // hotel from the list). ADMIN_HOTELS must already contain this hotel's row.
 function openHotelSettings(id){
   ADMIN_SETTINGS_HOTEL_ID = id;
+  ADMIN_HOTEL_PROFILE_TAB = 'overview';
+  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null, recoveryCases:null, revenue:null };
   STAFF_CURRENT = 'hotel-settings';
   buildStaffNav();
   staffRender();
   const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
+  // Overview and Staff tabs read from the platform-wide analytics/users
+  // lists rather than their own dedicated endpoints (that data already
+  // exists there, per-hotel) - refresh both so those two tabs aren't empty
+  // if this platform_admin hasn't visited the Dashboard/Users pages yet.
+  refreshAdminAnalytics();
+  refreshAdminUsers();
+  refreshAdminAlerts();
+  refreshAdminPlans();
+}
+async function refreshAdminPlans(){
+  if(ADMIN_PLANS !== null) return; // catalog is effectively static - fetch once per session
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    ADMIN_PLANS = await apiCall('/api/plans', {token}) || [];
+    if(STAFF_CURRENT==='hotel-settings') staffRender();
+  }catch(e){ /* silent - plan limits are a nice-to-have, not blocking */ }
 }
 function closeHotelSettings(){
   ADMIN_SETTINGS_HOTEL_ID = null;
   staffNav('hotels');
 }
-async function submitHotelSettings(id, btn){
-  const val = (elId) => { const el = document.getElementById(elId); return el ? el.value.trim() : ''; };
-  const name = val('hs-name');
-  if(!name){ toast(LANG==='ar'?'اسم الفندق مطلوب':'Hotel name is required'); return; }
-  const enabledDepartments = ALL_DEPARTMENTS.filter(d=>{
-    const el = document.getElementById('hs-dept-'+d);
-    return el && el.checked;
-  });
-  const conciergeEl = document.getElementById('hs-concierge-enabled');
-  const conciergeEnabled = !!(conciergeEl && conciergeEl.checked);
-  const billingAmountRaw = val('hs-billing-amount');
-  const body = {
-    name,
-    enabledDepartments,
-    conciergeEnabled,
-    currency: val('hs-currency') || undefined,
-    timezone: val('hs-timezone') || undefined,
-    checkinTime: val('hs-checkin') || undefined,
-    checkoutTime: val('hs-checkout') || undefined,
-    contactPhone: val('hs-phone'),
-    contactWhatsapp: val('hs-whatsapp'),
-    logoUrl: val('hs-logo'),
-    plan: val('hs-plan') || undefined,
-    billingStatus: val('hs-billing-status') || undefined,
-    billingAmount: billingAmountRaw ? Number(billingAmountRaw) : null,
-    billingNextDue: val('hs-billing-next-due') || null,
-    billingNotes: val('hs-billing-notes'),
-  };
+function setHotelProfileTab(tab){
+  ADMIN_HOTEL_PROFILE_TAB = tab;
+  staffRender();
+  const m = document.getElementById('staff-main'); if(m) m.scrollTop = 0;
+  loadHotelProfileTabData(tab);
+}
+// Lazy per-tab fetch for the four hotel-scoped drill-down endpoints plus the
+// hotel-filtered audit log. No-ops if already loaded for this hotel, or if
+// the tab doesn't need a dedicated fetch (overview/staff/alerts reuse
+// already-fetched platform-wide data, filtered client-side).
+async function loadHotelProfileTabData(tab){
+  const h = ADMIN_HOTELS.find(x=>x.id===ADMIN_SETTINGS_HOTEL_ID);
+  if(!h) return;
+  const token = getStaffToken();
+  const key = tab==='audit' ? 'auditLog' : tab==='billing' ? 'invoices' : tab==='recovery' ? 'recoveryCases' : tab;
+  if(!['guests','requests','feedback','facilities','audit','billing','gxi','recovery','revenue'].includes(tab)) return;
+  if(ADMIN_HOTEL_PROFILE_DATA[key] !== null) return;
+  try{
+    const apiSegment = tab==='recovery' ? 'recovery-cases' : key;
+    const path = tab==='audit' ? `/api/admin/audit-log?hotelId=${h.id}&limit=100` : `/api/admin/hotels/${h.id}/${apiSegment}`;
+    ADMIN_HOTEL_PROFILE_DATA[key] = await apiCall(path, {token}) || [];
+    if(STAFF_CURRENT==='hotel-settings' && ADMIN_HOTEL_PROFILE_TAB===tab) staffRender();
+  }catch(e){ ADMIN_HOTEL_PROFILE_DATA[key] = []; /* empty state rather than an infinite loading spinner */ }
+}
+// Each hotel-profile settings tab (Identity/Departments/Billing/Integration)
+// saves independently with its own small PATCH - since the tabbed page only
+// ever has ONE tab's fields in the DOM at a time (staffRender() rebuilds the
+// whole page on every tab switch), a single shared save-everything function
+// would silently wipe out fields that aren't currently rendered. The backend
+// PATCH already treats every field as optional (COALESCE), so a partial body
+// here is exactly as safe as the old all-in-one submit was.
+function hpVal(elId){ const el = document.getElementById(elId); return el ? el.value.trim() : ''; }
+async function hpSaveField(id, btn, body, okMsg){
   const origText = btn.textContent; btn.disabled = true;
   try{
     const token = getStaffToken();
     await apiCall('/api/admin/hotels/'+id, {method:'PATCH', token, body});
-    toast(t('hotel_updated_ok'));
+    toast(okMsg || t('hotel_updated_ok'));
     await refreshAdminHotels();
   }catch(e){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }finally{
     btn.disabled = false; btn.textContent = origText;
   }
+}
+async function submitHotelIdentity(id, btn){
+  const name = hpVal('hs-name');
+  if(!name){ toast(LANG==='ar'?'اسم الفندق مطلوب':'Hotel name is required'); return; }
+  await hpSaveField(id, btn, {
+    name,
+    currency: hpVal('hs-currency') || undefined,
+    timezone: hpVal('hs-timezone') || undefined,
+    checkinTime: hpVal('hs-checkin') || undefined,
+    checkoutTime: hpVal('hs-checkout') || undefined,
+    contactPhone: hpVal('hs-phone'),
+    contactWhatsapp: hpVal('hs-whatsapp'),
+    logoUrl: hpVal('hs-logo'),
+  });
+}
+async function submitHotelDepartments(id, btn){
+  const enabledDepartments = ALL_DEPARTMENTS.filter(d=>{
+    const el = document.getElementById('hs-dept-'+d);
+    return el && el.checked;
+  });
+  await hpSaveField(id, btn, { enabledDepartments });
+}
+async function submitHotelIntegration(id, btn){
+  const conciergeEl = document.getElementById('hs-concierge-enabled');
+  await hpSaveField(id, btn, { conciergeEnabled: !!(conciergeEl && conciergeEl.checked) });
+}
+async function submitHotelBilling(id, btn){
+  const billingAmountRaw = hpVal('hs-billing-amount');
+  await hpSaveField(id, btn, {
+    plan: hpVal('hs-plan') || undefined,
+    planRenewalDate: hpVal('hs-plan-renewal') || null,
+    billingStatus: hpVal('hs-billing-status') || undefined,
+    billingAmount: billingAmountRaw ? Number(billingAmountRaw) : null,
+    billingNextDue: hpVal('hs-billing-next-due') || null,
+    billingNotes: hpVal('hs-billing-notes'),
+  });
 }
 async function markHotelPaid(id){
   try{
@@ -857,6 +958,11 @@ async function refreshOpsData(){
       const token = getGuestToken();
       const reqs = await apiCall('/api/requests/mine', {token});
       CACHE.requests = reqs.map(mapBackendRequest);
+      // Keep the Offers tab fresh while the guest is looking at it (e.g. a
+      // staff member deactivates an offer mid-visit) - not fetched otherwise
+      // to avoid an unnecessary call on every 6s poll for guests elsewhere in
+      // the app.
+      if(CURRENT==='offers') GUEST_OFFERS = await apiCall('/api/offers', {token}).catch(()=>GUEST_OFFERS);
       render();
     }
   }catch(e){ /* silent: keep last known cache on transient network errors */ }
@@ -899,8 +1005,10 @@ const DICT = {
     treatments:"العلاجات", book:"احجز", time_slot:"الموعد",
     bill_total:"إجمالي الفاتورة", request_checkout:"طلب تسجيل المغادرة",
     loyalty_points:"نقاط الولاء", redeem:"استبدال", your_rating:"تقييمك", comments:"ملاحظاتك", send_feedback:"إرسال التقييم",
+    offers_none:"لا توجد عروض متاحة حالياً", offer_redeemed_ok:"تم إرسال طلب الاستبدال، سيقوم فريق الاستقبال بتأكيده",
     rsvp:"تأكيد الحضور", send:"إرسال", type_message:"اكتب رسالتك...",
     status_pending:"قيد الانتظار", status_progress:"جارٍ التنفيذ", status_done:"تم الإنجاز",
+    sla_overdue:"متأخر", sla_at_risk:"قارب على الانتهاء", sla_overdue_filter:"المتأخرة فقط", sla_no_overdue:"لا توجد طلبات متأخرة",
     empty_cart:"السلة فارغة", order_placed:"تم تأكيد الطلب وسيصل خلال 30 دقيقة",
     checkout_success:"تم إرسال طلب تسجيل المغادرة، سيتواصل معك موظف الاستقبال",
     feedback_thanks:"شكراً لتقييمك!", logged_out:"تم تسجيل الخروج",
@@ -928,6 +1036,19 @@ const DICT = {
     role_owner:"مالك الفندق", role_manager:"مدير الفندق", role_dept:"مدير قسم", role_platform_admin:"مسؤول المنصة",
     staff_nav_hotels:"إدارة الفنادق",
     platform_admin_login:"دخول كمسؤول المنصة", admin_email:"البريد الإلكتروني", back_to_login:"رجوع لتسجيل الدخول العادي",
+    forgot_password_link:"نسيت كلمة المرور؟",
+    forgot_password_title:"استعادة كلمة المرور",
+    forgot_password_sub:"أدخل بريدك الإلكتروني وهنبعتلك رابط لتغيير كلمة المرور",
+    send_reset_link:"إرسال رابط الاستعادة",
+    reset_link_sent_msg:"لو الحساب ده موجود، هيوصلك إيميل فيه رابط الاستعادة خلال دقائق. الرابط صالح لمدة ساعة واحدة.",
+    reset_password_title:"تعيين كلمة مرور جديدة",
+    new_password_label:"كلمة المرور الجديدة",
+    confirm_password_label:"تأكيد كلمة المرور",
+    reset_password_btn:"تغيير كلمة المرور",
+    passwords_dont_match:"كلمتا المرور غير متطابقتين",
+    password_too_short:"كلمة المرور لازم تكون 8 أحرف على الأقل",
+    password_reset_success:"تم تغيير كلمة المرور بنجاح، سجّل الدخول بكلمة المرور الجديدة",
+    reset_link_invalid:"رابط الاستعادة غير صالح أو منتهي الصلاحية. اطلب رابط جديد.",
     platform_overview:"نظرة عامة على المنصة",
     total_hotels:"إجمالي الفنادق", active_hotels:"فنادق نشطة", inactive_hotels:"فنادق معطّلة",
     add_hotel:"إضافة فندق جديد", hotel_slug:"المعرّف (slug)", hotel_display_name:"اسم الفندق",
@@ -958,11 +1079,40 @@ const DICT = {
     confirm_deactivate_user:"هل تريد تعطيل حساب هذا المستخدم؟", confirm_activate_user:"هل تريد تفعيل حساب هذا المستخدم؟",
     audit_log_title:"سجل التدقيق", no_audit_yet:"لا يوجد سجل بعد", col_actor:"المستخدم", col_action:"الإجراء", col_time:"الوقت",
     col_status:"الحالة", col_departments:"الأقسام", col_user:"المستخدم", col_role:"الصلاحية", col_target:"الهدف", col_when:"الوقت",
+    col_room:"الغرفة", col_guest:"النزيل", col_department:"القسم", col_comment:"التعليق", col_name:"الاسم", col_type:"النوع",
+    copy_label:"نسخ", copied_label:"تم النسخ",
+    hp_tab_overview:"نظرة عامة", hp_tab_identity:"الهوية والعلامة", hp_tab_departments:"الأقسام", hp_tab_billing:"الفوترة والباقة",
+    hp_tab_integration:"تكامل النظام", hp_tab_staff:"الموظفون", hp_tab_guests:"النزلاء الحاليون", hp_tab_requests:"الطلبات",
+    hp_tab_feedback:"التقييمات", hp_tab_facilities:"المرافق", hp_tab_audit:"سجل التدقيق", hp_tab_alerts:"التنبيهات",
+    hp_tab_links:"روابط سريعة", hp_tab_danger:"منطقة الخطر",
+    hp_no_guests:"لا يوجد نزلاء حاليون", hp_no_requests:"لا توجد طلبات", hp_no_feedback:"لا توجد تقييمات",
+    hp_no_facilities:"لا توجد مرافق", hp_no_audit:"لا يوجد سجل تدقيق لهذا الفندق", hp_no_alerts:"لا توجد تنبيهات لهذا الفندق",
+    hp_guest_staff_link:"رابط دخول الفندق (نزلاء وموظفون)",
+    hp_danger_note:"هذه الإجراءات تؤثر على قدرة موظفي ونزلاء هذا الفندق على الدخول للنظام.",
     search_hotels_ph:"ابحث عن فندق...", search_users_ph:"ابحث عن مستخدم...", search_audit_ph:"ابحث في السجل...",
     col_plan:"الباقة", col_billing:"حالة الدفع", billing_section:"الفوترة والاشتراك",
     setting_plan:"نوع الباقة", setting_billing_status:"حالة الدفع", setting_billing_amount:"قيمة الفاتورة",
     setting_billing_next_due:"تاريخ الاستحقاق القادم", setting_billing_notes:"ملاحظات الفوترة",
-    plan_standard:"أساسية", plan_premium:"مميزة", plan_enterprise:"مؤسسات",
+    plan_essential:"أساسية", plan_performance:"احترافية", plan_portfolio:"المحفظة",
+    setting_plan_renewal:"تاريخ تجديد الاشتراك",
+    invoices_section:"سجل الفواتير", add_invoice:"إضافة فاتورة", invoice_amount:"القيمة",
+    invoice_due_date:"تاريخ الاستحقاق", invoice_notes:"ملاحظات", invoice_status:"الحالة",
+    invoice_pending:"معلّقة", invoice_paid:"مدفوعة", invoice_overdue:"متأخرة", invoice_cancelled:"ملغاة",
+    mark_invoice_paid:"تحديد كمدفوعة", cancel_invoice:"إلغاء", no_invoices_yet:"لا توجد فواتير بعد",
+    invoice_amount_required:"القيمة مطلوبة ويجب أن تكون رقمًا موجبًا", plan_users_limit:"حد المستخدمين",
+    plan_unlimited:"غير محدود",
+    hp_tab_gxi:"مؤشر رضا النزيل", gxi_score_label:"مؤشر GXI (تقديري)", gxi_review_count:"عدد التقييمات",
+    gxi_no_reviews:"لا توجد تقييمات كافية بعد لحساب المؤشر",
+    gxi_disclaimer:"هذا مؤشر تقديري يُحسب من تحليل تلقائي لتقييمات النزلاء، وليس شهادة جودة رسمية أو معتمدة.",
+    hp_tab_recovery:"حالات الاسترداد", hp_no_recovery_cases:"لا توجد حالات استرداد حاليًا",
+    hp_tab_revenue:"الإيرادات الإضافية", revenue_total_label:"إجمالي الإيرادات المؤكدة", revenue_confirmed_count:"عدد الطلبات المؤكدة",
+    recovery_readonly_note:"يتم فتح هذه الحالات تلقائيًا عند تقييم سلبي قوي، ويتعامل معها فريق الفندق مباشرة. هذا العرض للاطلاع فقط.",
+    recovery_reason:"السبب", recovery_action:"الإجراء",
+    recovery_reason_negative_sentiment:"مشاعر سلبية في التعليق", recovery_reason_low_rating:"تقييم منخفض",
+    recovery_status_open:"مفتوحة", recovery_status_in_progress:"جاري العمل عليها", recovery_status_resolved:"تم الحل",
+    recovery_status_escalated:"تم التصعيد", recovery_status_ignored:"تم التجاهل",
+    recovery_action_room_upgrade:"ترقية غرفة", recovery_action_discount:"خصم", recovery_action_manager_apology:"اعتذار من الإدارة",
+    recovery_action_free_amenity:"خدمة مجانية", recovery_action_other:"إجراء آخر",
     billing_active:"سارية", billing_trial:"تجريبية", billing_overdue:"متأخرة الدفع", billing_suspended:"موقوفة",
     mark_as_paid:"تحديد كمدفوعة",
     staff_nav_alerts:"التنبيهات", staff_nav_search:"البحث الشامل", staff_nav_settings:"إعدادات المنصة",
@@ -1007,7 +1157,14 @@ const DICT = {
     username:"البريد الإلكتروني", password:"كلمة المرور", select_department:"اختر القسم",
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
-    staff_nav_prearrivals:"قبل الوصول", staff_nav_feedback:"التقييمات",
+    staff_nav_prearrivals:"قبل الوصول", staff_nav_feedback:"التقييمات", staff_nav_offers:"العروض والإيرادات",
+    offers_add_new:"إضافة عرض جديد", offers_price:"السعر", offers_min_stay:"أقل عدد ليالي", offers_no_min_stay:"بدون حد أدنى",
+    offers_time_window:"وقت التوفر", offers_no_window:"طوال اليوم", offers_type:"النوع",
+    offer_type_room_upgrade:"ترقية غرفة", offer_type_dining:"مطعم", offer_type_spa:"سبا", offer_type_other:"أخرى",
+    window_breakfast:"الفطور", window_lunch:"الغداء", window_dinner:"العشاء", window_anytime:"طوال اليوم",
+    offers_redemptions_title:"طلبات الاستبدال", offers_no_redemptions:"لا توجد طلبات استبدال بعد",
+    redemption_status_pending:"قيد الانتظار", redemption_status_confirmed:"مؤكد", redemption_status_cancelled:"ملغي",
+    confirm_action:"تأكيد", description_label:"الوصف", offer_created_ok:"تم إنشاء العرض بنجاح", offer_updated_ok:"تم تحديث العرض",
     kpi_occupied:"الغرف المشغولة", kpi_pending:"طلبات قيد الانتظار", kpi_progress:"جارٍ التنفيذ",
     kpi_done_today:"طلبات مكتملة", kpi_avg_rating:"متوسط التقييم", kpi_revenue:"إيرادات اليوم",
     recent_requests:"أحدث الطلبات", start:"بدء التنفيذ", complete:"إنهاء", all_depts:"الكل",
@@ -1037,8 +1194,10 @@ const DICT = {
     treatments:"Treatments", book:"Book", time_slot:"Time Slot",
     bill_total:"Bill Total", request_checkout:"Request Check-out",
     loyalty_points:"Loyalty Points", redeem:"Redeem", your_rating:"Your Rating", comments:"Comments", send_feedback:"Send Feedback",
+    offers_none:"No offers available right now", offer_redeemed_ok:"Redemption request sent - front desk will confirm it shortly",
     rsvp:"RSVP", send:"Send", type_message:"Type your message...",
     status_pending:"Pending", status_progress:"In Progress", status_done:"Done",
+    sla_overdue:"Overdue", sla_at_risk:"At risk", sla_overdue_filter:"Overdue only", sla_no_overdue:"No overdue requests",
     empty_cart:"Cart is empty", order_placed:"Order confirmed, arriving in ~30 min",
     checkout_success:"Check-out request sent, front desk will contact you",
     feedback_thanks:"Thanks for your feedback!", logged_out:"Logged out",
@@ -1066,6 +1225,19 @@ const DICT = {
     role_owner:"Hotel Owner", role_manager:"Hotel Manager", role_dept:"Department Manager", role_platform_admin:"Platform Admin",
     staff_nav_hotels:"Manage Hotels",
     platform_admin_login:"Platform Admin Login", admin_email:"Email", back_to_login:"Back to regular login",
+    forgot_password_link:"Forgot password?",
+    forgot_password_title:"Reset your password",
+    forgot_password_sub:"Enter your email and we'll send you a link to change your password",
+    send_reset_link:"Send reset link",
+    reset_link_sent_msg:"If that account exists, an email with a reset link is on its way. The link is valid for 1 hour.",
+    reset_password_title:"Set a new password",
+    new_password_label:"New password",
+    confirm_password_label:"Confirm password",
+    reset_password_btn:"Change password",
+    passwords_dont_match:"Passwords don't match",
+    password_too_short:"Password must be at least 8 characters",
+    password_reset_success:"Password changed successfully — sign in with your new password",
+    reset_link_invalid:"This reset link is invalid or has expired. Please request a new one.",
     platform_overview:"Platform Overview",
     total_hotels:"Total Hotels", active_hotels:"Active Hotels", inactive_hotels:"Inactive Hotels",
     add_hotel:"Add New Hotel", hotel_slug:"Slug", hotel_display_name:"Hotel Name",
@@ -1094,11 +1266,40 @@ const DICT = {
     per_hotel_breakdown:"Per-Hotel Breakdown",
     platform_users_title:"Platform Users", filter_all_hotels:"All Hotels", col_hotel:"Hotel", no_users_yet:"No users yet",
     col_status:"Status", col_departments:"Departments", col_user:"User", col_role:"Role", col_target:"Target", col_when:"When",
+    col_room:"Room", col_guest:"Guest", col_department:"Department", col_comment:"Comment", col_name:"Name", col_type:"Type",
+    copy_label:"Copy", copied_label:"Copied",
+    hp_tab_overview:"Overview", hp_tab_identity:"Identity & Brand", hp_tab_departments:"Departments", hp_tab_billing:"Billing & Plan",
+    hp_tab_integration:"System Integration", hp_tab_staff:"Staff", hp_tab_guests:"Current Guests", hp_tab_requests:"Requests",
+    hp_tab_feedback:"Feedback", hp_tab_facilities:"Facilities", hp_tab_audit:"Audit Log", hp_tab_alerts:"Alerts",
+    hp_tab_links:"Quick Links", hp_tab_danger:"Danger Zone",
+    hp_no_guests:"No current guests", hp_no_requests:"No requests", hp_no_feedback:"No feedback yet",
+    hp_no_facilities:"No facilities", hp_no_audit:"No audit entries for this hotel", hp_no_alerts:"No alerts for this hotel",
+    hp_guest_staff_link:"Hotel sign-in link (guests & staff)",
+    hp_danger_note:"These actions affect whether this hotel's staff and guests can sign in to the system.",
     search_hotels_ph:"Search hotels...", search_users_ph:"Search users...", search_audit_ph:"Search audit log...",
     col_plan:"Plan", col_billing:"Billing Status", billing_section:"Billing & Subscription",
     setting_plan:"Plan", setting_billing_status:"Billing Status", setting_billing_amount:"Invoice Amount",
     setting_billing_next_due:"Next Due Date", setting_billing_notes:"Billing Notes",
-    plan_standard:"Standard", plan_premium:"Premium", plan_enterprise:"Enterprise",
+    plan_essential:"Essential", plan_performance:"Performance", plan_portfolio:"Portfolio",
+    setting_plan_renewal:"Renewal Date",
+    invoices_section:"Invoice History", add_invoice:"Add Invoice", invoice_amount:"Amount",
+    invoice_due_date:"Due Date", invoice_notes:"Notes", invoice_status:"Status",
+    invoice_pending:"Pending", invoice_paid:"Paid", invoice_overdue:"Overdue", invoice_cancelled:"Cancelled",
+    mark_invoice_paid:"Mark as Paid", cancel_invoice:"Cancel", no_invoices_yet:"No invoices yet",
+    invoice_amount_required:"Amount is required and must be a positive number", plan_users_limit:"User Limit",
+    plan_unlimited:"Unlimited",
+    hp_tab_gxi:"Guest Experience (GXI)", gxi_score_label:"GXI Score (estimated)", gxi_review_count:"Review count",
+    gxi_no_reviews:"Not enough reviews yet to compute a score",
+    gxi_disclaimer:"This is an estimated index computed from automated analysis of guest reviews, not an official or certified quality rating.",
+    hp_tab_recovery:"Recovery Cases", hp_no_recovery_cases:"No recovery cases right now",
+    hp_tab_revenue:"Additional Revenue", revenue_total_label:"Total confirmed revenue", revenue_confirmed_count:"Confirmed count",
+    recovery_readonly_note:"These cases open automatically on a strongly negative review, and are handled directly by the hotel's own team. This view is read-only.",
+    recovery_reason:"Reason", recovery_action:"Action",
+    recovery_reason_negative_sentiment:"Negative sentiment in comment", recovery_reason_low_rating:"Low rating",
+    recovery_status_open:"Open", recovery_status_in_progress:"In Progress", recovery_status_resolved:"Resolved",
+    recovery_status_escalated:"Escalated", recovery_status_ignored:"Ignored",
+    recovery_action_room_upgrade:"Room Upgrade", recovery_action_discount:"Discount", recovery_action_manager_apology:"Manager Apology",
+    recovery_action_free_amenity:"Free Amenity", recovery_action_other:"Other Action",
     billing_active:"Active", billing_trial:"Trial", billing_overdue:"Overdue", billing_suspended:"Suspended",
     mark_as_paid:"Mark as Paid",
     staff_nav_alerts:"Alerts", staff_nav_search:"Global Search", staff_nav_settings:"Platform Settings",
@@ -1145,7 +1346,14 @@ const DICT = {
     username:"Email", password:"Password", select_department:"Select department",
     back:"Back", demo_hint:"Demo mode — any login details work",
     staff_nav_overview:"Overview", staff_nav_requests:"All Requests",
-    staff_nav_prearrivals:"Pre-Arrivals", staff_nav_feedback:"Feedback",
+    staff_nav_prearrivals:"Pre-Arrivals", staff_nav_feedback:"Feedback", staff_nav_offers:"Offers & Revenue",
+    offers_add_new:"Add New Offer", offers_price:"Price", offers_min_stay:"Min. Nights", offers_no_min_stay:"No minimum",
+    offers_time_window:"Time Window", offers_no_window:"All day", offers_type:"Type",
+    offer_type_room_upgrade:"Room Upgrade", offer_type_dining:"Dining", offer_type_spa:"Spa", offer_type_other:"Other",
+    window_breakfast:"Breakfast", window_lunch:"Lunch", window_dinner:"Dinner", window_anytime:"All day",
+    offers_redemptions_title:"Redemption Requests", offers_no_redemptions:"No redemption requests yet",
+    redemption_status_pending:"Pending", redemption_status_confirmed:"Confirmed", redemption_status_cancelled:"Cancelled",
+    confirm_action:"Confirm", description_label:"Description", offer_created_ok:"Offer created successfully", offer_updated_ok:"Offer updated",
     kpi_occupied:"Occupied rooms", kpi_pending:"Pending requests", kpi_progress:"In progress",
     kpi_done_today:"Completed", kpi_avg_rating:"Average rating", kpi_revenue:"Today's revenue",
     recent_requests:"Recent requests", start:"Start", complete:"Complete", all_depts:"All",
@@ -1779,22 +1987,22 @@ messages(){
 },
 
 offers(){
-  const offers = [
-    {ar:'خصم 20% على السبا', en:'20% off Spa', pts:0},
-    {ar:'ترقية غرفة مجانية', en:'Free room upgrade', pts:1500},
-    {ar:'إفطار مجاني ليومين', en:'2 free breakfasts', pts:800},
-  ];
+  if(GUEST_OFFERS===null){
+    loadGuestOffers();
+    return `${pageHead(t('nav_offers'))}<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  }
+  if(GUEST_OFFERS.length===0){
+    return `${pageHead(t('nav_offers'))}<div class="card"><p style="color:var(--muted)">${t('offers_none')}</p></div>`;
+  }
   return `
     ${pageHead(t('nav_offers'))}
-    <div class="card" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
-      <span>${t('loyalty_points')}</span><strong style="color:var(--accent2); font-size:20px;">${S.loyaltyPoints}</strong>
-    </div>
     <div class="grid grid-3">
-      ${offers.map(o=>`
+      ${GUEST_OFFERS.map(o=>`
         <div class="menu-item">
-          <div class="name">${LANG==='ar'?o.ar:o.en}</div>
-          <div class="desc">${o.pts>0? o.pts+' pts' : (LANG==='ar'?'مجاني':'Free')}</div>
-          <button class="btn sm" onclick="redeemOffer('${LANG==='ar'?o.ar:o.en}', ${o.pts})">${t('redeem')}</button>
+          <div class="name">${escapeHtml(o.name)}</div>
+          ${o.description ? `<div class="desc">${escapeHtml(o.description)}</div>` : ''}
+          <div class="desc" style="margin-top:4px; font-weight:600; color:var(--accent2);">${Number(o.price)} ${escapeHtml(o.currency||'SAR')}</div>
+          <button class="btn sm" onclick="redeemOffer(${o.id}, this)">${t('redeem')}</button>
         </div>`).join('')}
     </div>
   `;
@@ -2001,12 +2209,16 @@ function sendMessage(){
     });
 }
 
-function redeemOffer(name, pts){
-  if(pts>0 && S.loyaltyPoints<pts){ toast(LANG==='ar'?'نقاط غير كافية':'Not enough points'); return; }
-  S.loyaltyPoints -= pts;
-  saveState();
-  toast(`${name} ${LANG==='ar'?'تم الاستبدال':'redeemed'} ✓`);
-  render();
+async function redeemOffer(offerId, btn){
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    await apiCall(`/api/offers/${offerId}/redeem`, {method:'POST', token:getGuestToken()});
+    toast(t('offer_redeemed_ok'));
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'تعذر الاستبدال':'Could not redeem offer'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
 }
 
 function setRating(i){ window.__rating = i; render(); }
@@ -2063,6 +2275,7 @@ function renderLogin(){
       <input type="password" id="login-pass" placeholder="•••••">
     </div>
     <button class="btn full" onclick="unifiedLogin(this)">${t('login_btn')}</button>
+    <button class="btn link full" style="margin-top:10px; background:none; border:none; color:var(--accent); font-size:13px; cursor:pointer;" onclick="renderForgotPassword(false)">${t('forgot_password_link')}</button>
     <button class="btn ghost full" style="margin-top:10px;" onclick="renderAdminLogin()">${t('platform_admin_login')}</button>
   `;
 }
@@ -2083,6 +2296,7 @@ function renderAdminLogin(){
       <input type="password" id="admin-login-pass" placeholder="•••••">
     </div>
     <button class="btn full" onclick="adminLogin(this)">${t('login_btn')}</button>
+    <button class="btn link full" style="margin-top:10px; background:none; border:none; color:var(--accent); font-size:13px; cursor:pointer;" onclick="renderForgotPassword(true)">${t('forgot_password_link')}</button>
     <button class="btn ghost full" style="margin-top:10px;" onclick="renderLogin()">${t('back_to_login')}</button>
   `;
 }
@@ -2109,6 +2323,90 @@ async function adminLogin(btn){
   buildStaffNav();
   staffNav(defaultStaffPage('platform_admin'));
   startLivePolling();
+}
+// --- Forgot / reset password ---
+// isAdmin decides scope: platform_admin lookup is global (no hotel slug),
+// hotel staff/owner/manager lookup is scoped by HOTEL_SLUG - mirrors the two
+// login forms this is reached from (renderAdminLogin vs renderLogin).
+function renderForgotPassword(isAdmin){
+  const card = document.getElementById('login-card');
+  if(!card) return;
+  card.style.maxWidth = '380px';
+  card.innerHTML = `
+    <div class="login-logo"><img src="${LOGO_DATA_URI}" alt="ATHWA"></div>
+    <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('forgot_password_title')}</h2>
+    <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">${t('forgot_password_sub')}</p>
+    <div class="field" style="text-align:start;">
+      <label>${t('admin_email')}</label>
+      <input id="fp-email" type="email" placeholder="you@example.com">
+    </div>
+    <button class="btn full" onclick="submitForgotPassword(${isAdmin?'true':'false'}, this)">${t('send_reset_link')}</button>
+    <button class="btn ghost full" style="margin-top:10px;" onclick="${isAdmin?'renderAdminLogin()':'renderLogin()'}">${t('back_to_login')}</button>
+  `;
+}
+async function submitForgotPassword(isAdmin, btn){
+  const email = document.getElementById('fp-email').value.trim();
+  if(!email){ toast(LANG==='ar'?'من فضلك أدخل بريدك الإلكتروني':'Please enter your email'); return; }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    await apiCall('/api/auth/forgot-password', {method:'POST', body: isAdmin ? {email} : {email, slug:HOTEL_SLUG}});
+  }catch(e){
+    // The backend always returns 200 with a generic message (see routes-auth.js
+    // GENERIC_RESET_MSG) - a thrown error here means a real transport/network
+    // failure, not "account not found", so it's fine to surface as-is.
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+  const card = document.getElementById('login-card');
+  if(card){
+    card.innerHTML = `
+      <div class="login-logo"><img src="${LOGO_DATA_URI}" alt="ATHWA"></div>
+      <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('forgot_password_title')}</h2>
+      <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">${t('reset_link_sent_msg')}</p>
+      <button class="btn ghost full" onclick="${isAdmin?'renderAdminLogin()':'renderLogin()'}">${t('back_to_login')}</button>
+    `;
+  }
+}
+// Reached via the emailed link (?reset=<token> in the URL, handled in boot()
+// below) rather than from a nav click, so it takes the token directly instead
+// of reading it from a click handler's closure.
+function renderResetPassword(token){
+  const card = document.getElementById('login-card');
+  if(!card) return;
+  card.style.maxWidth = '380px';
+  card.innerHTML = `
+    <div class="login-logo"><img src="${LOGO_DATA_URI}" alt="ATHWA"></div>
+    <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('reset_password_title')}</h2>
+    <div class="field" style="text-align:start;">
+      <label>${t('new_password_label')}</label>
+      <input type="password" id="rp-pass1" placeholder="•••••••">
+    </div>
+    <div class="field" style="text-align:start;">
+      <label>${t('confirm_password_label')}</label>
+      <input type="password" id="rp-pass2" placeholder="•••••••">
+    </div>
+    <button class="btn full" onclick="submitResetPassword('${token.replace(/'/g,'')}', this)">${t('reset_password_btn')}</button>
+  `;
+}
+async function submitResetPassword(token, btn){
+  const p1 = document.getElementById('rp-pass1').value;
+  const p2 = document.getElementById('rp-pass2').value;
+  if(p1.length < 8){ toast(t('password_too_short')); return; }
+  if(p1 !== p2){ toast(t('passwords_dont_match')); return; }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    await apiCall('/api/auth/reset-password', {method:'POST', body:{token, newPassword:p1}});
+    toast(t('password_reset_success'));
+    // Drop ?reset=... from the URL so a page refresh doesn't re-show this
+    // form with an already-consumed (now-invalid) token.
+    const url = new URL(location.href); url.searchParams.delete('reset');
+    history.replaceState({}, '', url.toString());
+    renderLogin();
+  }catch(e){
+    toast(e.message || t('reset_link_invalid'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
 }
 function staffLogout(){
   S.staff = {loggedIn:false, role:null, dept:null, name:''};
@@ -2137,11 +2435,12 @@ const STAFF_ICONS = {
   audit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>',
   alerts:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  offers: ICONS.gift,
   settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
 const STAFF_NAV_BY_ROLE = {
-  owner:['overview','requests','prearrivals','feedback'],
-  manager:['overview','requests','prearrivals','feedback'],
+  owner:['overview','requests','prearrivals','feedback','offers'],
+  manager:['overview','requests','prearrivals','feedback','offers'],
   dept:['requests'],
   platform_admin:['dashboard','hotels','analytics','users','audit','alerts','search','settings'],
 };
@@ -2156,6 +2455,109 @@ function defaultStaffPage(role){
   return 'overview';
 }
 let STAFF_CURRENT = 'overview';
+// Roadmap Phase 5 (Revenue Studio): owner/manager's own offer catalog +
+// pending redemption ledger for their hotel. null = not fetched yet.
+let STAFF_OFFERS = null;
+let STAFF_REDEMPTIONS = null;
+let STAFF_OFFERS_FORM_OPEN = false;
+async function refreshStaffOffers(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    const [offers, redemptions] = await Promise.all([
+      apiCall('/api/offers/manage', {token}),
+      apiCall('/api/offers/redemptions', {token}),
+    ]);
+    STAFF_OFFERS = offers || [];
+    STAFF_REDEMPTIONS = redemptions || [];
+    if(STAFF_CURRENT==='offers') staffRender();
+  }catch(e){ /* silent: keep last known lists on transient network errors */ }
+}
+function toggleStaffOffersForm(){
+  STAFF_OFFERS_FORM_OPEN = !STAFF_OFFERS_FORM_OPEN;
+  staffRender();
+}
+async function submitStaffOffer(btn){
+  const name = document.getElementById('so-name').value.trim();
+  const price = parseFloat(document.getElementById('so-price').value);
+  const type = document.getElementById('so-type').value;
+  const timeWindow = document.getElementById('so-window').value || null;
+  const minStayRaw = document.getElementById('so-minstay').value.trim();
+  const minStayNights = minStayRaw ? parseInt(minStayRaw, 10) : null;
+  const description = document.getElementById('so-desc').value.trim();
+  if(!name || !Number.isFinite(price) || price < 0){
+    toast(LANG==='ar'?'من فضلك أدخل اسم العرض وسعر صحيح':'Please enter an offer name and a valid price'); return;
+  }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/offers/manage', {method:'POST', token, body:{name, price, type, timeWindow, minStayNights, description: description || undefined}});
+    toast(t('offer_created_ok'));
+    STAFF_OFFERS_FORM_OPEN = false;
+    STAFF_OFFERS = null; STAFF_REDEMPTIONS = null;
+    staffRender();
+    await refreshStaffOffers();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشل إنشاء العرض':'Failed to create offer'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+async function toggleOfferActive(id, currentActive){
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/offers/manage/'+id, {method:'PATCH', token, body:{active: !currentActive}});
+    toast(t('offer_updated_ok'));
+    STAFF_OFFERS = null;
+    await refreshStaffOffers();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
+async function setRedemptionStatus(id, status){
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/offers/redemptions/'+id, {method:'PATCH', token, body:{status}});
+    STAFF_REDEMPTIONS = null;
+    await refreshStaffOffers();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
+function staffOfferForm(){
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="grid grid-2">
+        <div class="field"><label>${t('col_name')}</label><input id="so-name" placeholder="${t('col_name')}"></div>
+        <div class="field"><label>${t('offers_price')}</label><input id="so-price" type="number" min="0" step="0.01"></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="field"><label>${t('offers_type')}</label>
+          <select id="so-type">
+            <option value="room_upgrade">${t('offer_type_room_upgrade')}</option>
+            <option value="dining">${t('offer_type_dining')}</option>
+            <option value="spa">${t('offer_type_spa')}</option>
+            <option value="other" selected>${t('offer_type_other')}</option>
+          </select>
+        </div>
+        <div class="field"><label>${t('offers_time_window')}</label>
+          <select id="so-window">
+            <option value="">${t('offers_no_window')}</option>
+            <option value="breakfast">${t('window_breakfast')}</option>
+            <option value="lunch">${t('window_lunch')}</option>
+            <option value="dinner">${t('window_dinner')}</option>
+            <option value="anytime">${t('window_anytime')}</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div class="field"><label>${t('offers_min_stay')}</label><input id="so-minstay" type="number" min="0" step="1" placeholder="${t('offers_no_min_stay')}"></div>
+        <div class="field"><label>${t('description_label')}</label><input id="so-desc"></div>
+      </div>
+      <button class="btn" onclick="submitStaffOffer(this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
 function buildStaffNav(){
   const items = STAFF_NAV_BY_ROLE[S.staff.role] || [];
   const sidenav = document.getElementById('staff-sidenav');
@@ -2187,6 +2589,7 @@ function staffNav(key){
     else if(key==='alerts') refreshAdminAlerts();
     else if(key==='settings'){ refreshPlatformSettings(); refreshPlatformAdmins(); }
   }
+  if(S.staff.loggedIn && (S.staff.role==='owner' || S.staff.role==='manager') && key==='offers') refreshStaffOffers();
 }
 function staffRender(){
   const main = document.getElementById('staff-main');
@@ -2244,6 +2647,11 @@ function opsTitle(item){
 }
 function statusPillClass(s){ return s==='done' ? '' : s==='progress' ? 'info' : 'warn'; }
 function statusLabel(s){ return s==='done'?t('status_done'): s==='progress'?t('status_progress'):t('status_pending'); }
+// SLA badge is deliberately silent for 'on_time' (no badge shown at all) -
+// only surface it once there's something to act on, so a healthy queue
+// isn't cluttered with green badges on every single card.
+function slaPillClass(s){ return s==='overdue' ? 'warn' : s==='at_risk' ? 'info' : ''; }
+function slaPillLabel(s){ return s==='overdue'?t('sla_overdue'): s==='at_risk'?t('sla_at_risk'):''; }
 function getAllOpsRequests(){
   return CACHE.requests.slice().sort((a,b)=> new Date(b.time)-new Date(a.time));
 }
@@ -2384,6 +2792,457 @@ function bucketGrowthForChart(entries){
 function formatShortDate(iso){
   const d = new Date(iso+'T00:00:00Z');
   return d.toLocaleDateString(LANG==='ar'?'ar-SA':'en-US', {month:'short', day:'numeric'});
+}
+
+/* ---------------- Hotel profile page: 14 tabs ---------------- */
+function hpTabsBar(){
+  return `<div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+    ${HOTEL_PROFILE_TABS.map(([key,labelKey])=>`
+      <button class="btn sm ${ADMIN_HOTEL_PROFILE_TAB===key?'':'secondary'}" onclick="setHotelProfileTab('${key}')">${t(labelKey)}</button>
+    `).join('')}
+  </div>`;
+}
+function hpEmptyState(loaded, msgKey){
+  if(loaded===null) return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  if(loaded.length===0) return `<div class="card"><p style="color:var(--muted)">${t(msgKey)}</p></div>`;
+  return null;
+}
+function hpOverviewTab(h){
+  const row = ADMIN_ANALYTICS ? ADMIN_ANALYTICS.perHotel.find(x=>x.id===h.id) : null;
+  if(!row){
+    return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  }
+  return `
+    <div class="grid grid-3" style="margin-bottom:14px;">
+      ${kpiCard(ICONS_ADMIN.guests, t('active_guests_kpi'), row.active_guests)}
+      ${kpiCard(ICONS_ADMIN.bolt, t('open_requests_kpi'), row.open_requests)}
+      ${kpiCard(ICONS_ADMIN.star, t('avg_rating_kpi'), row.avg_rating ?? '-')}
+    </div>
+    <div class="grid grid-3" style="margin-bottom:16px;">
+      ${kpiCard(STAFF_ICONS.users, t('active_staff_kpi'), row.staff_count)}
+      ${kpiCard(STAFF_ICONS.hotels, t('col_status'), h.archived_at ? t('status_archived') : (h.active?t('status_active'):t('status_inactive')))}
+      ${kpiCard(ICONS_ADMIN.building, t('col_departments'), `${(h.enabled_departments||[]).length}/${ALL_DEPARTMENTS.length}`)}
+    </div>
+    <div class="card">
+      <strong style="display:block; margin-bottom:8px;">${t('col_plan')} · ${t('col_billing')}</strong>
+      <p style="color:var(--muted); font-size:13.5px; margin:0;">
+        ${t('plan_'+(h.plan||'essential'))} · ${t('billing_'+(h.billing_status||'active'))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
+      </p>
+    </div>
+  `;
+}
+function hpIdentityTab(h){
+  return `
+    <div class="card">
+      <div class="grid grid-2">
+        <div class="field"><label>${t('hotel_display_name')}</label><input id="hs-name" value="${escapeHtml(h.name)}"></div>
+        <div class="field"><label>${t('setting_currency')}</label><input id="hs-currency" value="${escapeHtml(h.currency||'SAR')}" placeholder="SAR"></div>
+        <div class="field"><label>${t('setting_timezone')}</label><input id="hs-timezone" value="${escapeHtml(h.timezone||'Asia/Riyadh')}" placeholder="Asia/Riyadh"></div>
+        <div class="field"><label>${t('setting_checkin')}</label><input id="hs-checkin" value="${escapeHtml(h.checkin_time||'15:00')}" placeholder="15:00"></div>
+        <div class="field"><label>${t('setting_checkout')}</label><input id="hs-checkout" value="${escapeHtml(h.checkout_time||'12:00')}" placeholder="12:00"></div>
+        <div class="field"><label>${t('setting_phone')}</label><input id="hs-phone" value="${escapeHtml(h.contact_phone||'')}" placeholder="+966 5X XXX XXXX"></div>
+        <div class="field"><label>${t('setting_whatsapp')}</label><input id="hs-whatsapp" value="${escapeHtml(h.contact_whatsapp||'')}" placeholder="+966 5X XXX XXXX"></div>
+        <div class="field"><label>${t('setting_logo_url')}</label><input id="hs-logo" value="${escapeHtml(h.logo_url||'')}" placeholder="https://..."></div>
+      </div>
+      <button class="btn" onclick="submitHotelIdentity(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+function hpDepartmentsTab(h){
+  const enabled = h.enabled_departments || [];
+  return `
+    <div class="card">
+      <div class="grid grid-2" style="margin-bottom:14px;">
+        ${ALL_DEPARTMENTS.map(d=>`
+          <label class="row" style="gap:6px; font-size:13.5px;">
+            <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
+            <span>${t('nav_'+d)}</span>
+          </label>
+        `).join('')}
+      </div>
+      <button class="btn" onclick="submitHotelDepartments(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+function hpBillingTab(h){
+  const plan = ADMIN_PLANS && ADMIN_PLANS.find(p=>p.slug===(h.plan||'essential'));
+  const planLimitLine = plan
+    ? `${t('plan_users_limit')}: ${plan.max_users!=null?plan.max_users:t('plan_unlimited')}`
+    : '';
+  const invoices = ADMIN_HOTEL_PROFILE_DATA.invoices;
+  return `
+    <div class="card">
+      <div class="row between" style="margin-bottom:12px;">
+        <strong>${t('billing_section')}</strong>
+        <button class="btn sm secondary" onclick="markHotelPaid(${h.id})">${t('mark_as_paid')}</button>
+      </div>
+      <div class="grid grid-2">
+        <div class="field"><label>${t('setting_plan')}</label>
+          <select id="hs-plan">
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${(h.plan||'essential')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+          </select>
+          ${planLimitLine?`<div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(planLimitLine)}</div>`:''}
+        </div>
+        <div class="field"><label>${t('setting_plan_renewal')}</label><input id="hs-plan-renewal" type="date" value="${h.plan_renewal_date ? String(h.plan_renewal_date).slice(0,10) : ''}"></div>
+        <div class="field"><label>${t('setting_billing_status')}</label>
+          <select id="hs-billing-status">
+            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>${t('setting_billing_amount')}</label><input id="hs-billing-amount" type="number" step="0.01" min="0" value="${h.billing_amount!=null?h.billing_amount:''}"></div>
+        <div class="field"><label>${t('setting_billing_next_due')}</label><input id="hs-billing-next-due" type="date" value="${h.billing_next_due ? String(h.billing_next_due).slice(0,10) : ''}"></div>
+      </div>
+      <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
+      <button class="btn" onclick="submitHotelBilling(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="row between" style="margin-bottom:12px;">
+        <strong>${t('invoices_section')}</strong>
+        <button class="btn sm secondary" onclick="showAddInvoiceForm(${h.id})">${t('add_invoice')}</button>
+      </div>
+      <div id="hp-add-invoice-form" style="display:none;margin-bottom:14px;">
+        <div class="grid grid-3">
+          <div class="field"><label>${t('invoice_amount')}</label><input id="hs-inv-amount" type="number" step="0.01" min="0"></div>
+          <div class="field"><label>${t('invoice_due_date')}</label><input id="hs-inv-due" type="date"></div>
+          <div class="field"><label>${t('invoice_notes')}</label><input id="hs-inv-notes" type="text"></div>
+        </div>
+        <button class="btn sm" onclick="submitAddInvoice(${h.id}, this)">${t('add_invoice')}</button>
+      </div>
+      ${hpInvoicesTable(h.id, invoices)}
+    </div>
+  `;
+}
+function hpInvoicesTable(hotelId, invoices){
+  if(invoices===null) return `<div class="muted">${t('loading')||'...'}</div>`;
+  if(!invoices.length) return `<div class="muted">${t('no_invoices_yet')}</div>`;
+  return `
+    <table class="table">
+      <thead><tr>
+        <th>${t('invoice_amount')}</th><th>${t('invoice_due_date')}</th><th>${t('invoice_status')}</th><th>${t('invoice_notes')}</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${invoices.map(inv=>`
+          <tr>
+            <td>${inv.amount} ${inv.currency||'SAR'}</td>
+            <td>${inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
+            <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${t('invoice_'+inv.status)}</span></td>
+            <td>${escapeHtml(inv.notes||'')}</td>
+            <td>
+              ${inv.status==='pending'||inv.status==='overdue' ? `
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'paid')">${t('mark_invoice_paid')}</button>
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'cancelled')">${t('cancel_invoice')}</button>
+              ` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+function showAddInvoiceForm(hotelId){
+  const el = document.getElementById('hp-add-invoice-form');
+  if(el) el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+async function submitAddInvoice(hotelId, btn){
+  const amountRaw = hpVal('hs-inv-amount');
+  const amount = Number(amountRaw);
+  if(!amountRaw || Number.isNaN(amount) || amount<=0){ toast(t('invoice_amount_required')); return; }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const token = getStaffToken();
+    await apiCall(`/api/admin/hotels/${hotelId}/invoices`, {method:'POST', token, body:{
+      amount, dueDate: hpVal('hs-inv-due')||undefined, notes: hpVal('hs-inv-notes')||undefined,
+    }});
+    ADMIN_HOTEL_PROFILE_DATA.invoices = null; // force refetch
+    await loadHotelProfileTabData('billing');
+    toast(t('hotel_updated_ok'));
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
+  }
+}
+async function setInvoiceStatus(hotelId, invoiceId, status){
+  try{
+    const token = getStaffToken();
+    await apiCall(`/api/admin/hotels/${hotelId}/invoices/${invoiceId}`, {method:'PATCH', token, body:{status}});
+    ADMIN_HOTEL_PROFILE_DATA.invoices = null;
+    await loadHotelProfileTabData('billing');
+    toast(t('hotel_updated_ok'));
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
+function hpGxiTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.gxi;
+  if(data===null) return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  const score = data.score;
+  const color = score===null ? 'var(--muted)' : score>=70 ? 'var(--ok, #1a9c5c)' : score>=40 ? 'var(--warn, #c68a1a)' : 'var(--danger, #c62828)';
+  return `
+    <div class="card" style="text-align:center;padding:28px;">
+      ${score===null
+        ? `<div class="muted">${t('gxi_no_reviews')}</div>`
+        : `<div style="font-size:52px;font-weight:800;color:${color};line-height:1;">${score}</div>
+           <div class="muted" style="margin-top:6px;">${t('gxi_score_label')} · ${t('gxi_review_count')}: ${data.reviewCount}</div>`
+      }
+      <div class="muted" style="font-size:12px;margin-top:16px;max-width:520px;margin-left:auto;margin-right:auto;">
+        ${t('gxi_disclaimer')}
+      </div>
+    </div>
+  `;
+}
+function hpRecoveryTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.recoveryCases;
+  const empty = hpEmptyState(data, 'hp_no_recovery_cases');
+  if(empty) return empty;
+  return `
+    <div class="muted" style="font-size:12px;margin-bottom:10px;">${t('recovery_readonly_note')}</div>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr>
+          <th>${t('col_room')}</th><th>${t('recovery_reason')}</th><th>${t('invoice_status')}</th>
+          <th>${t('recovery_action')}</th><th>${t('created_label')}</th>
+        </tr></thead>
+        <tbody>
+          ${data.map(c=>`
+            <tr>
+              <td>${escapeHtml(c.room_number||'-')}</td>
+              <td>${t('recovery_reason_'+c.trigger_reason)}</td>
+              <td><span class="pill ${c.status==='open'?'warn':c.status==='resolved'?'ok':''}">${t('recovery_status_'+c.status)}</span></td>
+              <td>${c.action_taken ? t('recovery_action_'+c.action_taken) : '-'}</td>
+              <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpRevenueTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.revenue;
+  if(data===null) return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  const redemptions = data.redemptions || [];
+  return `
+    <div class="card" style="text-align:center; padding:24px; margin-bottom:18px;">
+      <div style="font-size:40px; font-weight:800; color:var(--accent2); line-height:1;">${Number(data.totalRevenue||0)} SAR</div>
+      <div class="muted" style="margin-top:6px;">${t('revenue_total_label')} · ${t('revenue_confirmed_count')}: ${data.confirmedCount||0}</div>
+    </div>
+    ${redemptions.length===0 ? `<div class="card"><p style="color:var(--muted)">${t('offers_no_redemptions')}</p></div>` : `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_room')}</th><th>${t('col_name')}</th><th>${t('offers_price')}</th><th>${t('col_status')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${redemptions.map(r=>`
+            <tr>
+              <td>${escapeHtml(r.room_number||'-')}</td>
+              <td>${escapeHtml(r.offer_name)}</td>
+              <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
+              <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+              <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  `;
+}
+function hpIntegrationTab(h){
+  return `
+    <div class="card">
+      <label class="row" style="gap:8px; font-size:14px; margin-bottom:14px;">
+        <input type="checkbox" id="hs-concierge-enabled" ${h.concierge_enabled!==false?'checked':''}>
+        <span>${t('setting_concierge_enabled')}</span>
+      </label>
+      <button class="btn" onclick="submitHotelIntegration(${h.id}, this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+function hpStaffTab(h){
+  const list = ADMIN_USERS.filter(u=>String(u.hotel_id)===String(h.id));
+  const empty = hpEmptyState(ADMIN_USERS===null ? null : list, 'no_users_yet');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_user')}</th><th>${t('col_role')}</th><th>${t('col_status')}</th><th></th></tr></thead>
+        <tbody>
+          ${list.map(u=>`
+            <tr>
+              <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
+              <td>${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''}</td>
+              <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
+              <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpGuestsTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.guests;
+  const empty = hpEmptyState(data, 'hp_no_guests');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_room')}</th><th>${t('col_guest')}</th><th>${t('col_status')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(g=>`
+            <tr>
+              <td>${escapeHtml(g.room_number)}</td>
+              <td>${escapeHtml(g.name)}</td>
+              <td><span class="pill ${g.active?'':'danger'}">${g.active?t('status_active'):t('status_inactive')}</span></td>
+              <td>${g.created_at ? new Date(g.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpRequestsTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.requests;
+  const empty = hpEmptyState(data, 'hp_no_requests');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_room')}</th><th>${t('col_department')}</th><th>${t('col_status')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(r=>`
+            <tr>
+              <td>${escapeHtml(r.room_number||'-')}</td>
+              <td>${t('nav_'+r.department)}</td>
+              <td><span class="pill">${r.status}</span></td>
+              <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpFeedbackTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.feedback;
+  const empty = hpEmptyState(data, 'hp_no_feedback');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_room')}</th><th>${t('avg_rating_kpi')}</th><th>${t('col_comment')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(f=>`
+            <tr>
+              <td>${escapeHtml(f.room_number||'-')}</td>
+              <td>${f.rating!=null?('★ '+f.rating):'-'}</td>
+              <td>${escapeHtml(f.comment||'-')}</td>
+              <td>${f.created_at ? new Date(f.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpFacilitiesTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.facilities;
+  const empty = hpEmptyState(data, 'hp_no_facilities');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_name')}</th><th>${t('col_type')}</th><th>${t('col_status')}</th></tr></thead>
+        <tbody>
+          ${data.map(f=>`
+            <tr>
+              <td>${escapeHtml(f.name)}</td>
+              <td>${escapeHtml(f.type)}</td>
+              <td><span class="pill ${f.active?'':'danger'}">${f.active?t('status_active'):t('status_inactive')}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpAuditTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.auditLog;
+  const empty = hpEmptyState(data, 'hp_no_audit');
+  if(empty) return empty;
+  return `
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr><th>${t('col_action')}</th><th>${t('col_actor')}</th><th>${t('created_label')}</th></tr></thead>
+        <tbody>
+          ${data.map(a=>`
+            <tr>
+              <td>${escapeHtml(a.action)}</td>
+              <td>${escapeHtml(a.actor_name||a.actor_type)}</td>
+              <td>${a.created_at ? new Date(a.created_at).toLocaleString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function hpAlertsTab(h){
+  const data = (ADMIN_ALERTS||[]).filter(a=>String(a.hotelId)===String(h.id));
+  if(data.length===0) return `<div class="card"><p style="color:var(--muted)">${t('hp_no_alerts')}</p></div>`;
+  return `
+    <div class="card">
+      ${data.map(a=>`
+        <div class="list-item">
+          <span><span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${t('alert_'+a.type)}</span></span>
+          <span style="color:var(--muted); font-size:12px;">${escapeHtml(JSON.stringify(a.meta||{}))}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function hpLinksTab(h){
+  const guestLink = `${location.origin}/?hotel=${encodeURIComponent(h.slug)}`;
+  return `
+    <div class="card">
+      <div class="field">
+        <label>${t('hp_guest_staff_link')}</label>
+        <div class="row" style="gap:8px;">
+          <input id="hp-link-input" value="${escapeHtml(guestLink)}" readonly>
+          <button class="btn sm secondary" onclick="navigator.clipboard.writeText(document.getElementById('hp-link-input').value); toast(t('copied_label'))">${t('copy_label')}</button>
+        </div>
+      </div>
+      ${h.contact_whatsapp ? `<p style="font-size:13.5px; color:var(--muted);">${t('setting_whatsapp')}: <a href="https://wa.me/${escapeHtml(h.contact_whatsapp.replace(/[^0-9]/g,''))}" target="_blank" rel="noopener">${escapeHtml(h.contact_whatsapp)}</a></p>` : ''}
+      ${h.contact_phone ? `<p style="font-size:13.5px; color:var(--muted);">${t('setting_phone')}: <a href="tel:${escapeHtml(h.contact_phone)}">${escapeHtml(h.contact_phone)}</a></p>` : ''}
+    </div>
+  `;
+}
+function hpDangerTab(h){
+  const isArchived = !!h.archived_at;
+  return `
+    <div class="card">
+      <div class="row" style="gap:8px; flex-wrap:wrap;">
+        <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+        ${isArchived
+          ? `<button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>`
+          : `<button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>`}
+      </div>
+      <p style="color:var(--muted); font-size:12.5px; margin-top:12px;">${t('hp_danger_note')}</p>
+    </div>
+  `;
+}
+function hpTabContent(h){
+  switch(ADMIN_HOTEL_PROFILE_TAB){
+    case 'identity': return hpIdentityTab(h);
+    case 'departments': return hpDepartmentsTab(h);
+    case 'billing': return hpBillingTab(h);
+    case 'gxi': return hpGxiTab(h);
+    case 'recovery': return hpRecoveryTab(h);
+    case 'revenue': return hpRevenueTab(h);
+    case 'integration': return hpIntegrationTab(h);
+    case 'staff': return hpStaffTab(h);
+    case 'guests': return hpGuestsTab(h);
+    case 'requests': return hpRequestsTab(h);
+    case 'feedback': return hpFeedbackTab(h);
+    case 'facilities': return hpFacilitiesTab(h);
+    case 'audit': return hpAuditTab(h);
+    case 'alerts': return hpAlertsTab(h);
+    case 'links': return hpLinksTab(h);
+    case 'danger': return hpDangerTab(h);
+    default: return hpOverviewTab(h);
+  }
 }
 
 /* ---------------- Staff renderers ---------------- */
@@ -2529,7 +3388,7 @@ const STAFF_RENDERERS = {
           <td><input type="checkbox" ${isArchived?'disabled':''} ${ADMIN_HOTELS_SELECTED.has(h.id)?'checked':''} onchange="toggleHotelSelected(${h.id}, this.checked)"></td>
           <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
           <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
-          <td>${t('plan_'+(h.plan||'standard'))}</td>
+          <td>${t('plan_'+(h.plan||'essential'))}</td>
           <td><span class="pill ${billingPillClass}">${t('billing_'+billingStatus)}</span></td>
           <td class="num">${deptCount}/${ALL_DEPARTMENTS.length}</td>
           <td>${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</td>
@@ -2586,7 +3445,7 @@ const STAFF_RENDERERS = {
           <label style="font-size:11px;">${t('filter_plan_label')}</label>
           <select onchange="setHotelsFilter('plan', this.value)">
             <option value="all" ${ADMIN_HOTELS_FILTER_PLAN==='all'?'selected':''}>${t('all_plans')}</option>
-            ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
           </select>
         </div>
         <div class="field" style="margin:0;">
@@ -2628,72 +3487,15 @@ const STAFF_RENDERERS = {
       return `${pageHead(t('hotel_settings'))}<div class="card"><p style="color:var(--muted)">${t('no_hotels_yet')}</p></div>
         <button class="btn sm secondary" onclick="closeHotelSettings()">${t('back_to_hotels')}</button>`;
     }
-    const enabled = h.enabled_departments || [];
     return `
       ${breadcrumb([
         {label: t('staff_nav_hotels'), onclick:'closeHotelSettings()'},
         {label: escapeHtml(h.name)},
       ])}
       ${pageHead(t('hotel_settings'), escapeHtml(h.name) + ' · ' + escapeHtml(h.slug))}
-
-      <div class="card" style="margin-bottom:16px;">
-        <strong style="display:block; margin-bottom:12px;">${t('hotel_identity_section')}</strong>
-        <div class="grid grid-2">
-          <div class="field"><label>${t('hotel_display_name')}</label><input id="hs-name" value="${escapeHtml(h.name)}"></div>
-          <div class="field"><label>${t('setting_currency')}</label><input id="hs-currency" value="${escapeHtml(h.currency||'SAR')}" placeholder="SAR"></div>
-          <div class="field"><label>${t('setting_timezone')}</label><input id="hs-timezone" value="${escapeHtml(h.timezone||'Asia/Riyadh')}" placeholder="Asia/Riyadh"></div>
-          <div class="field"><label>${t('setting_checkin')}</label><input id="hs-checkin" value="${escapeHtml(h.checkin_time||'15:00')}" placeholder="15:00"></div>
-          <div class="field"><label>${t('setting_checkout')}</label><input id="hs-checkout" value="${escapeHtml(h.checkout_time||'12:00')}" placeholder="12:00"></div>
-          <div class="field"><label>${t('setting_phone')}</label><input id="hs-phone" value="${escapeHtml(h.contact_phone||'')}" placeholder="+966 5X XXX XXXX"></div>
-          <div class="field"><label>${t('setting_whatsapp')}</label><input id="hs-whatsapp" value="${escapeHtml(h.contact_whatsapp||'')}" placeholder="+966 5X XXX XXXX"></div>
-          <div class="field"><label>${t('setting_logo_url')}</label><input id="hs-logo" value="${escapeHtml(h.logo_url||'')}" placeholder="https://..."></div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <strong style="display:block; margin-bottom:12px;">${t('departments_section')}</strong>
-        <div class="grid grid-2">
-          ${ALL_DEPARTMENTS.map(d=>`
-            <label class="row" style="gap:6px; font-size:13.5px;">
-              <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
-              <span>${t('nav_'+d)}</span>
-            </label>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <strong style="display:block; margin-bottom:12px;">${t('system_integration_section')}</strong>
-        <label class="row" style="gap:8px; font-size:14px;">
-          <input type="checkbox" id="hs-concierge-enabled" ${h.concierge_enabled!==false?'checked':''}>
-          <span>${t('setting_concierge_enabled')}</span>
-        </label>
-      </div>
-
-      <div class="card" style="margin-bottom:16px;">
-        <div class="row between" style="margin-bottom:12px;">
-          <strong>${t('billing_section')}</strong>
-          <button class="btn sm secondary" onclick="markHotelPaid(${h.id})">${t('mark_as_paid')}</button>
-        </div>
-        <div class="grid grid-2">
-          <div class="field"><label>${t('setting_plan')}</label>
-            <select id="hs-plan">
-              ${['standard','premium','enterprise'].map(p=>`<option value="${p}" ${(h.plan||'standard')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field"><label>${t('setting_billing_status')}</label>
-            <select id="hs-billing-status">
-              ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="field"><label>${t('setting_billing_amount')}</label><input id="hs-billing-amount" type="number" step="0.01" min="0" value="${h.billing_amount!=null?h.billing_amount:''}"></div>
-          <div class="field"><label>${t('setting_billing_next_due')}</label><input id="hs-billing-next-due" type="date" value="${h.billing_next_due ? String(h.billing_next_due).slice(0,10) : ''}"></div>
-        </div>
-        <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
-      </div>
-
-      <div class="row" style="gap:8px;">
-        <button class="btn" onclick="submitHotelSettings(${h.id}, this)">${t('save_changes')}</button>
+      ${hpTabsBar()}
+      ${hpTabContent(h)}
+      <div class="row" style="gap:8px; margin-top:16px;">
         <button class="btn secondary" onclick="closeHotelSettings()">${t('cancel')}</button>
       </div>
     `;
@@ -2839,6 +3641,9 @@ const STAFF_RENDERERS = {
     if(isDept) all = all.filter(r=>r.dept===S.staff.dept);
     const filterDept = window.__staffDeptFilter || 'all';
     if(!isDept && filterDept!=='all') all = all.filter(r=>r.dept===filterDept);
+    const overdueOnly = !!window.__staffSlaFilter;
+    const overdueCount = all.filter(r=>r.slaStatus==='overdue').length;
+    if(overdueOnly) all = all.filter(r=>r.slaStatus==='overdue');
     return `
       ${pageHead(isDept ? t('nav_'+S.staff.dept) : t('staff_nav_requests'))}
       ${!isDept?`
@@ -2846,8 +3651,13 @@ const STAFF_RENDERERS = {
           <button class="${filterDept==='all'?'active':''}" onclick="window.__staffDeptFilter='all'; staffRender();">${t('all_depts')}</button>
           ${DEPTS_WITH_QUEUE.filter(d=>!S.staff.enabledDepartments || S.staff.enabledDepartments.includes(d)).map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${t('nav_'+d)}</button>`).join('')}
         </div>`:''}
+      <div class="row" style="margin-bottom:12px;">
+        <button class="btn sm ${overdueOnly?'':'secondary'}" onclick="window.__staffSlaFilter=!window.__staffSlaFilter; staffRender();">
+          ${t('sla_overdue_filter')}${overdueCount?' ('+overdueCount+')':''}
+        </button>
+      </div>
       <div class="card">
-        ${all.length===0?`<p style="color:var(--muted)">${t('no_data')}</p>`:
+        ${all.length===0?`<p style="color:var(--muted)">${overdueOnly?t('sla_no_overdue'):t('no_data')}</p>`:
         all.map(r=>`
           <div class="list-item" style="align-items:flex-start;">
             <div>
@@ -2855,6 +3665,7 @@ const STAFF_RENDERERS = {
               <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?t('nav_'+r.dept)+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
             </div>
             <div class="row" style="gap:6px;">
+              ${slaPillLabel(r.slaStatus)?`<span class="pill ${slaPillClass(r.slaStatus)}">${slaPillLabel(r.slaStatus)}</span>`:''}
               <span class="pill ${statusPillClass(r.status)}">${statusLabel(r.status)}</span>
               ${r.status!=='done'?`<button class="btn sm secondary" onclick="advanceStatus('${r.id}')">${r.status==='pending'?t('start'):t('complete')}</button>`:''}
             </div>
@@ -2892,6 +3703,62 @@ const STAFF_RENDERERS = {
           </div>
           <p style="color:var(--muted); font-size:13.5px; margin:8px 0 0;">${escapeHtml(LANG==='ar'?f.commentAr:f.commentEn)}</p>
         </div>`).join('')}
+    `;
+  },
+  offers(){
+    if(STAFF_OFFERS===null){
+      return `${pageHead(t('staff_nav_offers'))}<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+    }
+    const redemptions = STAFF_REDEMPTIONS || [];
+    return `
+      ${pageHead(t('staff_nav_offers'))}
+      <div class="row between" style="margin-bottom:14px;">
+        <div></div>
+        <button class="btn sm" onclick="toggleStaffOffersForm()">${STAFF_OFFERS_FORM_OPEN ? t('cancel') : t('offers_add_new')}</button>
+      </div>
+      ${STAFF_OFFERS_FORM_OPEN ? staffOfferForm() : ''}
+      <div class="dtable-wrap" style="margin-bottom:24px;">
+        <table class="dtable">
+          <thead><tr>
+            <th>${t('col_name')}</th><th>${t('offers_price')}</th><th>${t('offers_min_stay')}</th>
+            <th>${t('offers_time_window')}</th><th>${t('col_status')}</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${STAFF_OFFERS.length===0 ? `<tr><td colspan="6" style="color:var(--muted); text-align:center;">${t('offers_none')}</td></tr>` :
+            STAFF_OFFERS.map(o=>`
+              <tr>
+                <td><strong>${escapeHtml(o.name)}</strong>${o.description?`<div style="color:var(--muted); font-size:11.5px;">${escapeHtml(o.description)}</div>`:''}</td>
+                <td>${Number(o.price)} ${escapeHtml(o.currency||'SAR')}</td>
+                <td>${o.min_stay_nights!=null ? o.min_stay_nights : t('offers_no_min_stay')}</td>
+                <td>${o.time_window ? t('window_'+o.time_window) : t('offers_no_window')}</td>
+                <td><span class="pill ${o.active?'':'danger'}">${o.active?t('status_active'):t('status_inactive')}</span></td>
+                <td class="actions"><button class="btn sm secondary" onclick="toggleOfferActive(${o.id}, ${!!o.active})">${o.active?t('deactivate'):t('activate')}</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <h3 style="margin:0 0 10px;">${t('offers_redemptions_title')}</h3>
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr><th>${t('col_room')}</th><th>${t('col_name')}</th><th>${t('offers_price')}</th><th>${t('col_status')}</th><th></th></tr></thead>
+          <tbody>
+            ${redemptions.length===0 ? `<tr><td colspan="5" style="color:var(--muted); text-align:center;">${t('offers_no_redemptions')}</td></tr>` :
+            redemptions.map(r=>`
+              <tr>
+                <td>${escapeHtml(r.room_number||'-')}</td>
+                <td>${escapeHtml(r.offer_name)}</td>
+                <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
+                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+                <td class="actions">
+                  ${r.status==='pending' ? `
+                    <button class="btn sm" onclick="setRedemptionStatus(${r.id},'confirmed')">${t('confirm_action')}</button>
+                    <button class="btn sm secondary" onclick="setRedemptionStatus(${r.id},'cancelled')">${t('cancel')}</button>
+                  ` : '-'}
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
     `;
   },
   alerts(){
@@ -3043,6 +3910,15 @@ function boot(){
   saveState();
   const guestShell = document.getElementById('app');
   const staffShell = document.getElementById('staff-app');
+  const resetToken = new URLSearchParams(location.search).get('reset');
+  if(resetToken){
+    // A password-reset email link always takes priority over any existing
+    // logged-in session - someone following that link wants to set a new
+    // password right now, not land back in a stale dashboard.
+    applyLang();
+    renderResetPassword(resetToken);
+    return;
+  }
   if(S.loggedIn && guestShell){
     document.getElementById('login-screen').style.display='none';
     guestShell.classList.add('active');
