@@ -376,6 +376,7 @@ function mapBackendRequest(r){
     titleAr:r.request_type||'', titleEn:r.request_type||'',
     guestName:r.guest_name||'Guest', room:r.room_number||'-',
     staffAr:'', staffEn:'', time:r.created_at,
+    slaStatus:r.slaStatus||null, // 'on_time' | 'at_risk' | 'overdue' | null (closed requests)
   };
 }
 function mapBackendFeedback(f){
@@ -977,6 +978,7 @@ const DICT = {
     loyalty_points:"نقاط الولاء", redeem:"استبدال", your_rating:"تقييمك", comments:"ملاحظاتك", send_feedback:"إرسال التقييم",
     rsvp:"تأكيد الحضور", send:"إرسال", type_message:"اكتب رسالتك...",
     status_pending:"قيد الانتظار", status_progress:"جارٍ التنفيذ", status_done:"تم الإنجاز",
+    sla_overdue:"متأخر", sla_at_risk:"قارب على الانتهاء", sla_overdue_filter:"المتأخرة فقط", sla_no_overdue:"لا توجد طلبات متأخرة",
     empty_cart:"السلة فارغة", order_placed:"تم تأكيد الطلب وسيصل خلال 30 دقيقة",
     checkout_success:"تم إرسال طلب تسجيل المغادرة، سيتواصل معك موظف الاستقبال",
     feedback_thanks:"شكراً لتقييمك!", logged_out:"تم تسجيل الخروج",
@@ -1138,6 +1140,7 @@ const DICT = {
     loyalty_points:"Loyalty Points", redeem:"Redeem", your_rating:"Your Rating", comments:"Comments", send_feedback:"Send Feedback",
     rsvp:"RSVP", send:"Send", type_message:"Type your message...",
     status_pending:"Pending", status_progress:"In Progress", status_done:"Done",
+    sla_overdue:"Overdue", sla_at_risk:"At risk", sla_overdue_filter:"Overdue only", sla_no_overdue:"No overdue requests",
     empty_cart:"Cart is empty", order_placed:"Order confirmed, arriving in ~30 min",
     checkout_success:"Check-out request sent, front desk will contact you",
     feedback_thanks:"Thanks for your feedback!", logged_out:"Logged out",
@@ -2452,6 +2455,11 @@ function opsTitle(item){
 }
 function statusPillClass(s){ return s==='done' ? '' : s==='progress' ? 'info' : 'warn'; }
 function statusLabel(s){ return s==='done'?t('status_done'): s==='progress'?t('status_progress'):t('status_pending'); }
+// SLA badge is deliberately silent for 'on_time' (no badge shown at all) -
+// only surface it once there's something to act on, so a healthy queue
+// isn't cluttered with green badges on every single card.
+function slaPillClass(s){ return s==='overdue' ? 'warn' : s==='at_risk' ? 'info' : ''; }
+function slaPillLabel(s){ return s==='overdue'?t('sla_overdue'): s==='at_risk'?t('sla_at_risk'):''; }
 function getAllOpsRequests(){
   return CACHE.requests.slice().sort((a,b)=> new Date(b.time)-new Date(a.time));
 }
@@ -3284,6 +3292,9 @@ const STAFF_RENDERERS = {
     if(isDept) all = all.filter(r=>r.dept===S.staff.dept);
     const filterDept = window.__staffDeptFilter || 'all';
     if(!isDept && filterDept!=='all') all = all.filter(r=>r.dept===filterDept);
+    const overdueOnly = !!window.__staffSlaFilter;
+    const overdueCount = all.filter(r=>r.slaStatus==='overdue').length;
+    if(overdueOnly) all = all.filter(r=>r.slaStatus==='overdue');
     return `
       ${pageHead(isDept ? t('nav_'+S.staff.dept) : t('staff_nav_requests'))}
       ${!isDept?`
@@ -3291,8 +3302,13 @@ const STAFF_RENDERERS = {
           <button class="${filterDept==='all'?'active':''}" onclick="window.__staffDeptFilter='all'; staffRender();">${t('all_depts')}</button>
           ${DEPTS_WITH_QUEUE.filter(d=>!S.staff.enabledDepartments || S.staff.enabledDepartments.includes(d)).map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${t('nav_'+d)}</button>`).join('')}
         </div>`:''}
+      <div class="row" style="margin-bottom:12px;">
+        <button class="btn sm ${overdueOnly?'':'secondary'}" onclick="window.__staffSlaFilter=!window.__staffSlaFilter; staffRender();">
+          ${t('sla_overdue_filter')}${overdueCount?' ('+overdueCount+')':''}
+        </button>
+      </div>
       <div class="card">
-        ${all.length===0?`<p style="color:var(--muted)">${t('no_data')}</p>`:
+        ${all.length===0?`<p style="color:var(--muted)">${overdueOnly?t('sla_no_overdue'):t('no_data')}</p>`:
         all.map(r=>`
           <div class="list-item" style="align-items:flex-start;">
             <div>
@@ -3300,6 +3316,7 @@ const STAFF_RENDERERS = {
               <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?t('nav_'+r.dept)+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
             </div>
             <div class="row" style="gap:6px;">
+              ${slaPillLabel(r.slaStatus)?`<span class="pill ${slaPillClass(r.slaStatus)}">${slaPillLabel(r.slaStatus)}</span>`:''}
               <span class="pill ${statusPillClass(r.status)}">${statusLabel(r.status)}</span>
               ${r.status!=='done'?`<button class="btn sm secondary" onclick="advanceStatus('${r.id}')">${r.status==='pending'?t('start'):t('complete')}</button>`:''}
             </div>
