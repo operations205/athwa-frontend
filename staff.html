@@ -515,11 +515,11 @@ let ADMIN_SETTINGS_HOTEL_ID = null;
 // for a hotel someone is just glancing at). Reset whenever a different
 // hotel is opened (see openHotelSettings below).
 let ADMIN_HOTEL_PROFILE_TAB = 'overview';
-let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null };
+let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null };
 let ADMIN_PLANS = null; // catalog (essential/performance/portfolio) - loaded once, reused across hotels
 const HOTEL_PROFILE_TABS = [
   ['overview','hp_tab_overview'], ['identity','hp_tab_identity'], ['departments','hp_tab_departments'],
-  ['billing','hp_tab_billing'], ['integration','hp_tab_integration'], ['staff','hp_tab_staff'],
+  ['billing','hp_tab_billing'], ['gxi','hp_tab_gxi'], ['integration','hp_tab_integration'], ['staff','hp_tab_staff'],
   ['guests','hp_tab_guests'], ['requests','hp_tab_requests'], ['feedback','hp_tab_feedback'],
   ['facilities','hp_tab_facilities'], ['audit','hp_tab_audit'], ['alerts','hp_tab_alerts'],
   ['links','hp_tab_links'], ['danger','hp_tab_danger'],
@@ -611,7 +611,7 @@ async function toggleHotelActive(id, currentActive){
 function openHotelSettings(id){
   ADMIN_SETTINGS_HOTEL_ID = id;
   ADMIN_HOTEL_PROFILE_TAB = 'overview';
-  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null };
+  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null };
   STAFF_CURRENT = 'hotel-settings';
   buildStaffNav();
   staffRender();
@@ -653,7 +653,7 @@ async function loadHotelProfileTabData(tab){
   if(!h) return;
   const token = getStaffToken();
   const key = tab==='audit' ? 'auditLog' : tab==='billing' ? 'invoices' : tab;
-  if(!['guests','requests','feedback','facilities','audit','billing'].includes(tab)) return;
+  if(!['guests','requests','feedback','facilities','audit','billing','gxi'].includes(tab)) return;
   if(ADMIN_HOTEL_PROFILE_DATA[key] !== null) return;
   try{
     const path = tab==='audit' ? `/api/admin/audit-log?hotelId=${h.id}&limit=100` : `/api/admin/hotels/${h.id}/${key}`;
@@ -1083,6 +1083,9 @@ const DICT = {
     mark_invoice_paid:"تحديد كمدفوعة", cancel_invoice:"إلغاء", no_invoices_yet:"لا توجد فواتير بعد",
     invoice_amount_required:"القيمة مطلوبة ويجب أن تكون رقمًا موجبًا", plan_users_limit:"حد المستخدمين",
     plan_unlimited:"غير محدود",
+    hp_tab_gxi:"مؤشر رضا النزيل", gxi_score_label:"مؤشر GXI (تقديري)", gxi_review_count:"عدد التقييمات",
+    gxi_no_reviews:"لا توجد تقييمات كافية بعد لحساب المؤشر",
+    gxi_disclaimer:"هذا مؤشر تقديري يُحسب من تحليل تلقائي لتقييمات النزلاء، وليس شهادة جودة رسمية أو معتمدة.",
     billing_active:"سارية", billing_trial:"تجريبية", billing_overdue:"متأخرة الدفع", billing_suspended:"موقوفة",
     mark_as_paid:"تحديد كمدفوعة",
     staff_nav_alerts:"التنبيهات", staff_nav_search:"البحث الشامل", staff_nav_settings:"إعدادات المنصة",
@@ -1250,6 +1253,9 @@ const DICT = {
     mark_invoice_paid:"Mark as Paid", cancel_invoice:"Cancel", no_invoices_yet:"No invoices yet",
     invoice_amount_required:"Amount is required and must be a positive number", plan_users_limit:"User Limit",
     plan_unlimited:"Unlimited",
+    hp_tab_gxi:"Guest Experience (GXI)", gxi_score_label:"GXI Score (estimated)", gxi_review_count:"Review count",
+    gxi_no_reviews:"Not enough reviews yet to compute a score",
+    gxi_disclaimer:"This is an estimated index computed from automated analysis of guest reviews, not an official or certified quality rating.",
     billing_active:"Active", billing_trial:"Trial", billing_overdue:"Overdue", billing_suspended:"Suspended",
     mark_as_paid:"Mark as Paid",
     staff_nav_alerts:"Alerts", staff_nav_search:"Global Search", staff_nav_settings:"Platform Settings",
@@ -2807,6 +2813,24 @@ async function setInvoiceStatus(hotelId, invoiceId, status){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }
 }
+function hpGxiTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.gxi;
+  if(data===null) return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+  const score = data.score;
+  const color = score===null ? 'var(--muted)' : score>=70 ? 'var(--ok, #1a9c5c)' : score>=40 ? 'var(--warn, #c68a1a)' : 'var(--danger, #c62828)';
+  return `
+    <div class="card" style="text-align:center;padding:28px;">
+      ${score===null
+        ? `<div class="muted">${t('gxi_no_reviews')}</div>`
+        : `<div style="font-size:52px;font-weight:800;color:${color};line-height:1;">${score}</div>
+           <div class="muted" style="margin-top:6px;">${t('gxi_score_label')} · ${t('gxi_review_count')}: ${data.reviewCount}</div>`
+      }
+      <div class="muted" style="font-size:12px;margin-top:16px;max-width:520px;margin-left:auto;margin-right:auto;">
+        ${t('gxi_disclaimer')}
+      </div>
+    </div>
+  `;
+}
 function hpIntegrationTab(h){
   return `
     <div class="card">
@@ -2991,6 +3015,7 @@ function hpTabContent(h){
     case 'identity': return hpIdentityTab(h);
     case 'departments': return hpDepartmentsTab(h);
     case 'billing': return hpBillingTab(h);
+    case 'gxi': return hpGxiTab(h);
     case 'integration': return hpIntegrationTab(h);
     case 'staff': return hpStaffTab(h);
     case 'guests': return hpGuestsTab(h);
