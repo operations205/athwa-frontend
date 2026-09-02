@@ -515,11 +515,11 @@ let ADMIN_SETTINGS_HOTEL_ID = null;
 // for a hotel someone is just glancing at). Reset whenever a different
 // hotel is opened (see openHotelSettings below).
 let ADMIN_HOTEL_PROFILE_TAB = 'overview';
-let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null };
+let ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null, recoveryCases:null };
 let ADMIN_PLANS = null; // catalog (essential/performance/portfolio) - loaded once, reused across hotels
 const HOTEL_PROFILE_TABS = [
   ['overview','hp_tab_overview'], ['identity','hp_tab_identity'], ['departments','hp_tab_departments'],
-  ['billing','hp_tab_billing'], ['gxi','hp_tab_gxi'], ['integration','hp_tab_integration'], ['staff','hp_tab_staff'],
+  ['billing','hp_tab_billing'], ['gxi','hp_tab_gxi'], ['recovery','hp_tab_recovery'], ['integration','hp_tab_integration'], ['staff','hp_tab_staff'],
   ['guests','hp_tab_guests'], ['requests','hp_tab_requests'], ['feedback','hp_tab_feedback'],
   ['facilities','hp_tab_facilities'], ['audit','hp_tab_audit'], ['alerts','hp_tab_alerts'],
   ['links','hp_tab_links'], ['danger','hp_tab_danger'],
@@ -611,7 +611,7 @@ async function toggleHotelActive(id, currentActive){
 function openHotelSettings(id){
   ADMIN_SETTINGS_HOTEL_ID = id;
   ADMIN_HOTEL_PROFILE_TAB = 'overview';
-  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null };
+  ADMIN_HOTEL_PROFILE_DATA = { guests:null, requests:null, feedback:null, facilities:null, auditLog:null, invoices:null, gxi:null, recoveryCases:null };
   STAFF_CURRENT = 'hotel-settings';
   buildStaffNav();
   staffRender();
@@ -652,11 +652,12 @@ async function loadHotelProfileTabData(tab){
   const h = ADMIN_HOTELS.find(x=>x.id===ADMIN_SETTINGS_HOTEL_ID);
   if(!h) return;
   const token = getStaffToken();
-  const key = tab==='audit' ? 'auditLog' : tab==='billing' ? 'invoices' : tab;
-  if(!['guests','requests','feedback','facilities','audit','billing','gxi'].includes(tab)) return;
+  const key = tab==='audit' ? 'auditLog' : tab==='billing' ? 'invoices' : tab==='recovery' ? 'recoveryCases' : tab;
+  if(!['guests','requests','feedback','facilities','audit','billing','gxi','recovery'].includes(tab)) return;
   if(ADMIN_HOTEL_PROFILE_DATA[key] !== null) return;
   try{
-    const path = tab==='audit' ? `/api/admin/audit-log?hotelId=${h.id}&limit=100` : `/api/admin/hotels/${h.id}/${key}`;
+    const apiSegment = tab==='recovery' ? 'recovery-cases' : key;
+    const path = tab==='audit' ? `/api/admin/audit-log?hotelId=${h.id}&limit=100` : `/api/admin/hotels/${h.id}/${apiSegment}`;
     ADMIN_HOTEL_PROFILE_DATA[key] = await apiCall(path, {token}) || [];
     if(STAFF_CURRENT==='hotel-settings' && ADMIN_HOTEL_PROFILE_TAB===tab) staffRender();
   }catch(e){ ADMIN_HOTEL_PROFILE_DATA[key] = []; /* empty state rather than an infinite loading spinner */ }
@@ -1086,6 +1087,14 @@ const DICT = {
     hp_tab_gxi:"مؤشر رضا النزيل", gxi_score_label:"مؤشر GXI (تقديري)", gxi_review_count:"عدد التقييمات",
     gxi_no_reviews:"لا توجد تقييمات كافية بعد لحساب المؤشر",
     gxi_disclaimer:"هذا مؤشر تقديري يُحسب من تحليل تلقائي لتقييمات النزلاء، وليس شهادة جودة رسمية أو معتمدة.",
+    hp_tab_recovery:"حالات الاسترداد", hp_no_recovery_cases:"لا توجد حالات استرداد حاليًا",
+    recovery_readonly_note:"يتم فتح هذه الحالات تلقائيًا عند تقييم سلبي قوي، ويتعامل معها فريق الفندق مباشرة. هذا العرض للاطلاع فقط.",
+    recovery_reason:"السبب", recovery_action:"الإجراء",
+    recovery_reason_negative_sentiment:"مشاعر سلبية في التعليق", recovery_reason_low_rating:"تقييم منخفض",
+    recovery_status_open:"مفتوحة", recovery_status_in_progress:"جاري العمل عليها", recovery_status_resolved:"تم الحل",
+    recovery_status_escalated:"تم التصعيد", recovery_status_ignored:"تم التجاهل",
+    recovery_action_room_upgrade:"ترقية غرفة", recovery_action_discount:"خصم", recovery_action_manager_apology:"اعتذار من الإدارة",
+    recovery_action_free_amenity:"خدمة مجانية", recovery_action_other:"إجراء آخر",
     billing_active:"سارية", billing_trial:"تجريبية", billing_overdue:"متأخرة الدفع", billing_suspended:"موقوفة",
     mark_as_paid:"تحديد كمدفوعة",
     staff_nav_alerts:"التنبيهات", staff_nav_search:"البحث الشامل", staff_nav_settings:"إعدادات المنصة",
@@ -1256,6 +1265,14 @@ const DICT = {
     hp_tab_gxi:"Guest Experience (GXI)", gxi_score_label:"GXI Score (estimated)", gxi_review_count:"Review count",
     gxi_no_reviews:"Not enough reviews yet to compute a score",
     gxi_disclaimer:"This is an estimated index computed from automated analysis of guest reviews, not an official or certified quality rating.",
+    hp_tab_recovery:"Recovery Cases", hp_no_recovery_cases:"No recovery cases right now",
+    recovery_readonly_note:"These cases open automatically on a strongly negative review, and are handled directly by the hotel's own team. This view is read-only.",
+    recovery_reason:"Reason", recovery_action:"Action",
+    recovery_reason_negative_sentiment:"Negative sentiment in comment", recovery_reason_low_rating:"Low rating",
+    recovery_status_open:"Open", recovery_status_in_progress:"In Progress", recovery_status_resolved:"Resolved",
+    recovery_status_escalated:"Escalated", recovery_status_ignored:"Ignored",
+    recovery_action_room_upgrade:"Room Upgrade", recovery_action_discount:"Discount", recovery_action_manager_apology:"Manager Apology",
+    recovery_action_free_amenity:"Free Amenity", recovery_action_other:"Other Action",
     billing_active:"Active", billing_trial:"Trial", billing_overdue:"Overdue", billing_suspended:"Suspended",
     mark_as_paid:"Mark as Paid",
     staff_nav_alerts:"Alerts", staff_nav_search:"Global Search", staff_nav_settings:"Platform Settings",
@@ -2831,6 +2848,32 @@ function hpGxiTab(h){
     </div>
   `;
 }
+function hpRecoveryTab(h){
+  const data = ADMIN_HOTEL_PROFILE_DATA.recoveryCases;
+  const empty = hpEmptyState(data, 'hp_no_recovery_cases');
+  if(empty) return empty;
+  return `
+    <div class="muted" style="font-size:12px;margin-bottom:10px;">${t('recovery_readonly_note')}</div>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <thead><tr>
+          <th>${t('col_room')}</th><th>${t('recovery_reason')}</th><th>${t('invoice_status')}</th>
+          <th>${t('recovery_action')}</th><th>${t('created_label')}</th>
+        </tr></thead>
+        <tbody>
+          ${data.map(c=>`
+            <tr>
+              <td>${escapeHtml(c.room_number||'-')}</td>
+              <td>${t('recovery_reason_'+c.trigger_reason)}</td>
+              <td><span class="pill ${c.status==='open'?'warn':c.status==='resolved'?'ok':''}">${t('recovery_status_'+c.status)}</span></td>
+              <td>${c.action_taken ? t('recovery_action_'+c.action_taken) : '-'}</td>
+              <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
 function hpIntegrationTab(h){
   return `
     <div class="card">
@@ -3016,6 +3059,7 @@ function hpTabContent(h){
     case 'departments': return hpDepartmentsTab(h);
     case 'billing': return hpBillingTab(h);
     case 'gxi': return hpGxiTab(h);
+    case 'recovery': return hpRecoveryTab(h);
     case 'integration': return hpIntegrationTab(h);
     case 'staff': return hpStaffTab(h);
     case 'guests': return hpGuestsTab(h);
