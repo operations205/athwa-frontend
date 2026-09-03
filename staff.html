@@ -1158,6 +1158,7 @@ const DICT = {
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
     staff_nav_prearrivals:"قبل الوصول", staff_nav_feedback:"التقييمات", staff_nav_offers:"العروض والإيرادات",
+    staff_nav_performance:"الأداء", performance_readonly_note:"مؤشرات فندقك الخاصة - رضا النزلاء، الفوترة، والإيرادات. للاطلاع فقط.",
     offers_add_new:"إضافة عرض جديد", offers_price:"السعر", offers_min_stay:"أقل عدد ليالي", offers_no_min_stay:"بدون حد أدنى",
     offers_time_window:"وقت التوفر", offers_no_window:"طوال اليوم", offers_type:"النوع",
     offer_type_room_upgrade:"ترقية غرفة", offer_type_dining:"مطعم", offer_type_spa:"سبا", offer_type_other:"أخرى",
@@ -1347,6 +1348,7 @@ const DICT = {
     back:"Back", demo_hint:"Demo mode — any login details work",
     staff_nav_overview:"Overview", staff_nav_requests:"All Requests",
     staff_nav_prearrivals:"Pre-Arrivals", staff_nav_feedback:"Feedback", staff_nav_offers:"Offers & Revenue",
+    staff_nav_performance:"Performance", performance_readonly_note:"Your hotel's own numbers - guest satisfaction, billing, and revenue. View only.",
     offers_add_new:"Add New Offer", offers_price:"Price", offers_min_stay:"Min. Nights", offers_no_min_stay:"No minimum",
     offers_time_window:"Time Window", offers_no_window:"All day", offers_type:"Type",
     offer_type_room_upgrade:"Room Upgrade", offer_type_dining:"Dining", offer_type_spa:"Spa", offer_type_other:"Other",
@@ -2436,11 +2438,12 @@ const STAFF_ICONS = {
   alerts:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
   offers: ICONS.gift,
+  performance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
   settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
 const STAFF_NAV_BY_ROLE = {
-  owner:['overview','requests','prearrivals','feedback','offers'],
-  manager:['overview','requests','prearrivals','feedback','offers'],
+  owner:['overview','requests','prearrivals','feedback','offers','performance'],
+  manager:['overview','requests','prearrivals','feedback','offers','performance'],
   dept:['requests'],
   platform_admin:['dashboard','hotels','analytics','users','audit','alerts','search','settings'],
 };
@@ -2460,6 +2463,24 @@ let STAFF_CURRENT = 'overview';
 let STAFF_OFFERS = null;
 let STAFF_REDEMPTIONS = null;
 let STAFF_OFFERS_FORM_OPEN = false;
+// Owner-facing self-service dashboard: the same GXI/billing/revenue numbers
+// platform_admin can already see per hotel, now exposed read-only to the
+// owner/manager of that hotel via /api/performance/* (scoped server-side to
+// req.user.hotelId, so there's no way to view another hotel's numbers).
+let STAFF_PERFORMANCE = null;
+async function refreshStaffPerformance(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    const [gxi, billing, revenue] = await Promise.all([
+      apiCall('/api/performance/gxi', {token}),
+      apiCall('/api/performance/billing', {token}),
+      apiCall('/api/performance/revenue', {token}),
+    ]);
+    STAFF_PERFORMANCE = {gxi, billing, revenue};
+    if(STAFF_CURRENT==='performance') staffRender();
+  }catch(e){ /* silent: keep last known data on transient network errors */ }
+}
 async function refreshStaffOffers(){
   try{
     const token = getStaffToken();
@@ -2590,6 +2611,7 @@ function staffNav(key){
     else if(key==='settings'){ refreshPlatformSettings(); refreshPlatformAdmins(); }
   }
   if(S.staff.loggedIn && (S.staff.role==='owner' || S.staff.role==='manager') && key==='offers') refreshStaffOffers();
+  if(S.staff.loggedIn && (S.staff.role==='owner' || S.staff.role==='manager') && key==='performance') refreshStaffPerformance();
 }
 function staffRender(){
   const main = document.getElementById('staff-main');
@@ -3760,7 +3782,75 @@ const STAFF_RENDERERS = {
         </table>
       </div>
     `;
+  },  performance(){
+    if(STAFF_PERFORMANCE===null){
+      return `${pageHead(t('staff_nav_performance'))}<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+    }
+    const {gxi, billing, revenue} = STAFF_PERFORMANCE;
+    const score = gxi ? gxi.score : null;
+    const scoreColor = score===null||score===undefined ? 'var(--muted)' : score>=70 ? 'var(--ok, #1a9c5c)' : score>=40 ? 'var(--warn, #c68a1a)' : 'var(--danger, #c62828)';
+    const invoices = (billing && billing.invoices) || [];
+    const redemptions = (revenue && revenue.redemptions) || [];
+    return `
+      ${pageHead(t('staff_nav_performance'))}
+      <div class="muted" style="font-size:12px;margin-bottom:14px;">${t('performance_readonly_note')}</div>
+      <h3 style="margin:0 0 10px;">${t('gxi_score_label')}</h3>
+      <div class="card" style="text-align:center;padding:28px;margin-bottom:22px;">
+        ${score===null||score===undefined
+          ? `<div class="muted">${t('gxi_no_reviews')}</div>`
+          : `<div style="font-size:52px;font-weight:800;color:${scoreColor};line-height:1;">${score}</div>
+             <div class="muted" style="margin-top:6px;">${t('gxi_score_label')} · ${t('gxi_review_count')}: ${gxi.reviewCount}</div>`
+        }
+      </div>
+      <h3 style="margin:0 0 10px;">${t('billing_section')}</h3>
+      <div class="card" style="margin-bottom:22px;">
+        <div class="grid grid-2">
+          <div class="field"><label>${t('setting_plan')}</label><div>${t('plan_'+(billing.plan||'essential'))}</div></div>
+          <div class="field"><label>${t('setting_billing_status')}</label><div><span class="pill ${billing.billing_status==='overdue'||billing.billing_status==='suspended'?'danger':billing.billing_status==='active'?'ok':'warn'}">${t('billing_'+(billing.billing_status||'active'))}</span></div></div>
+          <div class="field"><label>${t('setting_billing_amount')}</label><div>${billing.billing_amount!=null?billing.billing_amount:'-'}</div></div>
+          <div class="field"><label>${t('setting_billing_next_due')}</label><div>${billing.billing_next_due?String(billing.billing_next_due).slice(0,10):'-'}</div></div>
+        </div>
+        ${billing.plan_renewal_date ? `<div class="muted" style="font-size:12px;margin-top:8px;">${t('setting_plan_renewal')}: ${String(billing.plan_renewal_date).slice(0,10)}</div>` : ''}
+      </div>
+      <h3 style="margin:0 0 10px;">${t('invoices_section')}</h3>
+      <div class="dtable-wrap" style="margin-bottom:22px;">
+        ${invoices.length===0 ? `<div class="card"><p style="color:var(--muted)">${t('no_invoices_yet')}</p></div>` : `
+        <table class="dtable">
+          <thead><tr><th>${t('invoice_amount')}</th><th>${t('invoice_due_date')}</th><th>${t('invoice_status')}</th><th>${t('invoice_notes')}</th></tr></thead>
+          <tbody>
+            ${invoices.map(inv=>`
+              <tr>
+                <td>${inv.amount} ${inv.currency||'SAR'}</td>
+                <td>${inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
+                <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${t('invoice_'+inv.status)}</span></td>
+                <td>${escapeHtml(inv.notes||'')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>
+      <h3 style="margin:0 0 10px;">${t('revenue_total_label')}</h3>
+      <div class="card" style="text-align:center; padding:24px; margin-bottom:18px;">
+        <div style="font-size:40px; font-weight:800; color:var(--accent2); line-height:1;">${Number((revenue&&revenue.totalRevenue)||0)} SAR</div>
+        <div class="muted" style="margin-top:6px;">${t('revenue_total_label')} · ${t('revenue_confirmed_count')}: ${(revenue&&revenue.confirmedCount)||0}</div>
+      </div>
+      ${redemptions.length===0 ? `<div class="card"><p style="color:var(--muted)">${t('offers_no_redemptions')}</p></div>` : `
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr><th>${t('col_room')}</th><th>${t('col_name')}</th><th>${t('offers_price')}</th><th>${t('col_status')}</th></tr></thead>
+          <tbody>
+            ${redemptions.map(r=>`
+              <tr>
+                <td>${escapeHtml(r.room_number||'-')}</td>
+                <td>${escapeHtml(r.offer_name)}</td>
+                <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
+                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`}
+    `;
   },
+
   alerts(){
     const list = ADMIN_ALERTS;
     const counts = {danger:0, warn:0, info:0};
