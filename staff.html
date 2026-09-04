@@ -884,6 +884,18 @@ async function toggleAdminPlatformAdminActive(id, currentActive){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }
 }
+async function deleteAdminPlatformAdmin(id, email){
+  const msg = t('confirm_delete_admin') + (email ? ('\n\n' + email) : '');
+  if(!confirm(msg)) return;
+  try{
+    const token = getStaffToken();
+    await apiCall('/api/admin/platform-admins/'+id, {method:'DELETE', token});
+    toast(t('admin_deleted_ok'));
+    await refreshPlatformAdmins();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }
+}
 async function submitPlatformSettings(btn){
   const val = (elId) => { const el = document.getElementById(elId); return el ? el.value.trim() : ''; };
   const defaultEnabledDepartments = ALL_DEPARTMENTS.filter(d=>{
@@ -1129,7 +1141,7 @@ const DICT = {
     default_departments_section:"الأقسام الافتراضية للفنادق الجديدة",
     platform_admins_section:"مشرفو المنصة", add_platform_admin:"+ إضافة مشرف",
     admin_scope_full:"صلاحية كاملة", admin_scope_readonly:"عرض فقط",
-    col_scope:"الصلاحية", new_admin_name:"اسم المشرف", new_admin_email:"البريد الإلكتروني",
+    col_scope:"الصلاحية", delete_permanently:"حذف نهائي", confirm_delete_admin:"سيتم حذف حساب هذا المشرف نهائيًا من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه. متأكد؟", admin_deleted_ok:"تم حذف المشرف نهائيًا", new_admin_name:"اسم المشرف", new_admin_email:"البريد الإلكتروني",
     new_admin_password:"كلمة المرور", new_admin_scope:"مستوى الصلاحية",
     platform_admin_added_ok:"تم إضافة المشرف بنجاح", export_csv:"تصدير CSV",
     staff_nav_dashboard:"لوحة التحكم", dashboard_title:"لوحة تحكم المنصة",
@@ -1317,7 +1329,7 @@ const DICT = {
     default_departments_section:"Default Departments for New Hotels",
     platform_admins_section:"Platform Admins", add_platform_admin:"+ Add Admin",
     admin_scope_full:"Full Access", admin_scope_readonly:"Read Only",
-    col_scope:"Access", new_admin_name:"Admin Name", new_admin_email:"Email",
+    col_scope:"Access", delete_permanently:"Delete permanently", confirm_delete_admin:"This will permanently delete this admin account from the database. This cannot be undone. Are you sure?", admin_deleted_ok:"Admin deleted permanently", new_admin_name:"Admin Name", new_admin_email:"Email",
     new_admin_password:"Password", new_admin_scope:"Access Level",
     platform_admin_added_ok:"Platform admin added successfully", export_csv:"Export CSV",
     staff_nav_dashboard:"Dashboard", dashboard_title:"Platform Dashboard",
@@ -3953,7 +3965,7 @@ const STAFF_RENDERERS = {
                   <td><strong>${escapeHtml(a.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(a.email)}</div></td>
                   <td>${t('admin_scope_'+(a.admin_scope||'full'))}</td>
                   <td><span class="pill ${a.active?'':'danger'}">${a.active?t('status_active'):t('status_inactive')}</span></td>
-                  <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${a.id}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button>` : ''}</td>
+                  <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${a.id}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button> <button class="btn sm ghost" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="deleteAdminPlatformAdmin(${a.id}, '${escapeHtml(a.email)}')">${t('delete_permanently')}</button>` : ''}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
