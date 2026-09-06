@@ -1621,14 +1621,14 @@ prearrival(){
           <strong>${t('prearrival_summary')}</strong>
           <button class="btn ghost sm" onclick="S.preArrival.submitted=false; saveState(); render();">${t('edit')}</button>
         </div>
-        <div class="list-item"><span>${ICONS_SM.clock}${t('arrival_time')}</span><strong>${p.arrivalTime}</strong></div>
-        ${p.flightNo?`<div class="list-item"><span>${ICONS_SM.plane}${t('flight_no')}</span><strong>${p.flightNo}</strong></div>`:''}
+        <div class="list-item"><span>${ICONS_SM.clock}${t('arrival_time')}</span><strong>${escapeHtml(p.arrivalTime)}</strong></div>
+        ${p.flightNo?`<div class="list-item"><span>${ICONS_SM.plane}${t('flight_no')}</span><strong>${escapeHtml(p.flightNo)}</strong></div>`:''}
         <div class="list-item"><span>${ICONS_SM.bed}${t('pillow_type')}</span><strong>${t(p.pillow)}</strong></div>
         <div class="list-item"><span>${ICONS_SM.thermo}${t('room_temp_pref')}</span><strong>${t(p.temp)}</strong></div>
         <div class="list-item"><span>${ICONS_SM.building}${t('floor_pref')}</span><strong>${t(p.floor)}</strong></div>
         <div class="list-item"><span>${ICONS_SM.gift}${t('occasion')}</span><strong>${t(p.occasion)}</strong></div>
         <div class="list-item"><span>${ICONS_SM.alarm}${t('early_checkin')}</span><strong>${p.earlyCheckin?ICONS_SM.check:'—'}</strong></div>
-        ${p.notes?`<div class="list-item"><span>${ICONS_SM.note}${t('special_requests')}</span><strong>${p.notes}</strong></div>`:''}
+        ${p.notes?`<div class="list-item"><span>${ICONS_SM.note}${t('special_requests')}</span><strong>${escapeHtml(p.notes)}</strong></div>`:''}
       </div>
       <button class="btn secondary full" onclick="nav('dashboard')">${t('nav_dashboard')}</button>
     `;
@@ -1637,8 +1637,8 @@ prearrival(){
     ${pageHead(t('nav_prearrival'), LANG==='ar'?'خبّرنا بموعد وصولك وتفضيلاتك عشان نجهز غرفتك قبل ما توصل':"Tell us your arrival time and preferences so we can prepare your room before you arrive")}
     <div class="card">
       <div class="grid grid-2">
-        <div class="field"><label>${t('arrival_time')}</label><input type="time" id="pa-time" value="${p.arrivalTime}"></div>
-        <div class="field"><label>${t('flight_no')}</label><input id="pa-flight" placeholder="SV1234" value="${p.flightNo}"></div>
+        <div class="field"><label>${t('arrival_time')}</label><input type="time" id="pa-time" value="${escapeHtml(p.arrivalTime)}"></div>
+        <div class="field"><label>${t('flight_no')}</label><input id="pa-flight" placeholder="SV1234" value="${escapeHtml(p.flightNo)}"></div>
       </div>
       <div class="grid grid-2">
         <div class="field"><label>${t('pillow_type')}</label>
@@ -1678,7 +1678,7 @@ prearrival(){
       </div>
       <div class="field">
         <label>${t('special_requests')}</label>
-        <textarea id="pa-notes" rows="3">${p.notes}</textarea>
+        <textarea id="pa-notes" rows="3">${escapeHtml(p.notes)}</textarea>
       </div>
       <button class="btn full" onclick="submitPreArrival()">${t('submit_prearrival')}</button>
     </div>
@@ -1689,7 +1689,7 @@ dashboard(){
   const quick = ['reception','dining','housekeeping','concierge','spa','taxi','maintenance','billing'];
   const showBanner = !S.preArrival.submitted;
   return `
-    ${pageHead(`${t('greeting')}, ${S.guest.name||'Guest'}`, `${t('room_label')} ${S.guest.room||'-'} · ${t('room_type')} · ${S.guest.hotelName||t('hotel_name')}`)}
+    ${pageHead(`${t('greeting')}, ${escapeHtml(S.guest.name||'Guest')}`, `${t('room_label')} ${escapeHtml(S.guest.room||'-')} · ${t('room_type')} · ${escapeHtml(S.guest.hotelName||t('hotel_name'))}`)}
     ${showBanner?`
       <div class="banner">
         <div>
@@ -2067,7 +2067,7 @@ checkout(){
   return `
     ${pageHead(t('nav_checkout'))}
     <div class="card">
-      <div class="row between"><span>${t('room_label')}</span><strong>${S.guest.room}</strong></div>
+      <div class="row between"><span>${t('room_label')}</span><strong>${escapeHtml(S.guest.room)}</strong></div>
       <div class="row between" style="margin-top:8px;"><span>${t('bill_total')}</span><strong style="color:var(--accent2)">${total} SAR</strong></div>
       <button class="btn full" style="margin-top:16px;" onclick="requestCheckout()">${t('request_checkout')}</button>
     </div>
@@ -2082,7 +2082,7 @@ function requestsList(dept){
   if(items.length===0) return '';
   return `<div class="card" style="margin-top:18px;">
     <strong style="display:block; margin-bottom:10px;">${LANG==='ar'?'طلباتي':'My Requests'}</strong>
-    ${items.map(r=>`<div class="list-item"><span>${opsTitle(r)}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
+    ${items.map(r=>`<div class="list-item"><span>${escapeHtml(opsTitle(r))}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
   </div>`;
 }
 async function pushRequest(dept, title){
@@ -3306,7 +3306,7 @@ const STAFF_RENDERERS = {
 
     if(!d){
       return `
-        ${pageHead(t('dashboard_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+        ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
         ${headerControls}
         <div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>
       `;
@@ -3319,7 +3319,7 @@ const STAFF_RENDERERS = {
     const topAlerts = (ADMIN_ALERTS||[]).slice(0,3);
 
     return `
-      ${pageHead(t('dashboard_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       ${headerControls}
 
       <strong style="display:block; margin:0 0 10px; font-size:13px; color:var(--muted);">${t('dashboard_period_section')}</strong>
@@ -3392,7 +3392,7 @@ const STAFF_RENDERERS = {
       {label:t('kpi_revenue'), value:'18,420 SAR'},
     ];
     return `
-      ${pageHead(t('staff_nav_overview'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_overview'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpis.map(k=>`<div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${k.label}</div><div style="font-size:26px; font-weight:700;">${k.value}</div></div>`).join('')}
       </div>
@@ -3444,7 +3444,7 @@ const STAFF_RENDERERS = {
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('staff_nav_hotels'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_hotels'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(ICONS_ADMIN.building, t('total_hotels'), fullList.length)}
         ${kpiCard(STAFF_ICONS.hotels, t('active_hotels'), activeCount)}
@@ -3541,12 +3541,12 @@ const STAFF_RENDERERS = {
   analytics(){
     const a = ADMIN_ANALYTICS;
     if(!a){
-      return `${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
+      return `${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
     }
     const maxGuests = Math.max(1, ...a.perHotel.map(h=>h.active_guests||0));
     const maxReq = Math.max(1, ...a.perHotel.map(h=>h.open_requests||0));
     return `
-      ${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:14px;">
         ${kpiCard(STAFF_ICONS.hotels, t('total_hotels'), a.hotels.not_archived)}
         ${kpiCard(ICONS_ADMIN.building, t('active_hotels'), a.hotels.active)}
@@ -3609,7 +3609,7 @@ const STAFF_RENDERERS = {
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('platform_users_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('platform_users_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.users, t('platform_users_title'), list.length)}
         ${kpiCard(ICONS_ADMIN.power, t('active_users_kpi'), activeCount)}
@@ -3652,7 +3652,7 @@ const STAFF_RENDERERS = {
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('audit_log_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('audit_log_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.audit, t('audit_log_title'), list.length)}
       </div>
@@ -3699,7 +3699,7 @@ const STAFF_RENDERERS = {
         all.map(r=>`
           <div class="list-item" style="align-items:flex-start;">
             <div>
-              <div>${opsTitle(r)}</div>
+              <div>${escapeHtml(opsTitle(r))}</div>
               <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?t('nav_'+r.dept)+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
             </div>
             <div class="row" style="gap:6px;">
@@ -3720,8 +3720,8 @@ const STAFF_RENDERERS = {
         all.map(p=>`
           <div class="list-item" style="align-items:flex-start;">
             <div>
-              <div><strong>${p.name}</strong> — ${t('room_label')} ${p.room}</div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${ICONS_SM.clock}${p.arrivalTime} ${p.flightNo?ICONS_SM.plane+p.flightNo:''} · ${ICONS_SM.bed}${t(p.pillow)} · ${ICONS_SM.gift}${t(p.occasion)}</div>
+              <div><strong>${escapeHtml(p.name)}</strong> — ${t('room_label')} ${escapeHtml(p.room)}</div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${ICONS_SM.clock}${escapeHtml(p.arrivalTime)} ${p.flightNo?ICONS_SM.plane+escapeHtml(p.flightNo):''} · ${ICONS_SM.bed}${t(p.pillow)} · ${ICONS_SM.gift}${t(p.occasion)}</div>
             </div>
             ${p.earlyCheckin?`<span class="pill info">${t('early_checkin')}</span>`:''}
           </div>`).join('')}
@@ -3873,7 +3873,7 @@ const STAFF_RENDERERS = {
     list.forEach(a=>{ if(counts[a.severity]!==undefined) counts[a.severity]++; });
     const sevIcon = {danger: ICONS_ADMIN.bolt, warn: STAFF_ICONS.alerts, info: ICONS_ADMIN.clockKpi};
     return `
-      ${pageHead(t('staff_nav_alerts'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_alerts'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(ICONS_ADMIN.bolt, t('alerts_critical_kpi'), counts.danger)}
         ${kpiCard(STAFF_ICONS.alerts, t('alerts_warning_kpi'), counts.warn)}
@@ -3901,7 +3901,7 @@ const STAFF_RENDERERS = {
   },
   search(){
     return `
-      ${pageHead(t('staff_nav_search'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_search'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       ${searchBar('admin-global-search-input', t('search_placeholder_global'), 'onAdminGlobalSearchInput(this.value)')}
       <div id="admin-search-results">${renderAdminSearchResults()}</div>
     `;
@@ -3912,7 +3912,7 @@ const STAFF_RENDERERS = {
     const isFull = S.staff.adminScope !== 'readonly';
     const depts = s ? (s.default_enabled_departments||[]) : ALL_DEPARTMENTS;
     return `
-      ${pageHead(t('staff_nav_settings'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_settings'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
       ${!isFull ? `<div class="card" style="margin-bottom:16px; border-color:var(--warn);"><span class="pill warn">${t('readonly_admin_notice')}</span></div>` : ''}
       ${!s ? `<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>` : `
       <div class="card" style="margin-bottom:16px;">
