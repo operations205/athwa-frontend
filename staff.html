@@ -888,7 +888,9 @@ async function toggleAdminPlatformAdminActive(id, currentActive){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }
 }
-async function deleteAdminPlatformAdmin(id, email){
+async function deleteAdminPlatformAdmin(id){
+  const admin = ADMIN_PLATFORM_ADMINS.find(a=>a.id===id);
+  const email = admin ? admin.email : '';
   const msg = t('confirm_delete_admin') + (email ? ('\n\n' + email) : '');
   if(!confirm(msg)) return;
   try{
@@ -1385,7 +1387,7 @@ function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
 // the DICT only distinguishes owner/manager/department-level/platform roles.
 function roleLabel(role){
   if(role==='dept_manager' || role==='staff') return t('role_dept');
-  return t('role_'+role);
+  return escapeHtml(t('role_'+role));
 }
 
 function applyLang(){
@@ -1567,7 +1569,7 @@ function buildNav(){
   const enabled = S.guest && S.guest.enabledDepartments;
   const items = NAV_ITEMS.filter(key => !ALL_DEPARTMENTS.includes(key) || !enabled || enabled.includes(key));
   items.forEach(key=>{
-    const label = t('nav_'+key);
+    const label = escapeHtml(t('nav_'+key));
     const html = `<div class="nav-item ${CURRENT===key?'active':''}" onclick="nav('${key}')">${ICONS[key]}<span>${label}</span></div>`;
     sidenav.insertAdjacentHTML('beforeend', html);
     bottomnav.insertAdjacentHTML('beforeend', html);
@@ -1621,14 +1623,14 @@ prearrival(){
           <strong>${t('prearrival_summary')}</strong>
           <button class="btn ghost sm" onclick="S.preArrival.submitted=false; saveState(); render();">${t('edit')}</button>
         </div>
-        <div class="list-item"><span>${ICONS_SM.clock}${t('arrival_time')}</span><strong>${p.arrivalTime}</strong></div>
-        ${p.flightNo?`<div class="list-item"><span>${ICONS_SM.plane}${t('flight_no')}</span><strong>${p.flightNo}</strong></div>`:''}
-        <div class="list-item"><span>${ICONS_SM.bed}${t('pillow_type')}</span><strong>${t(p.pillow)}</strong></div>
-        <div class="list-item"><span>${ICONS_SM.thermo}${t('room_temp_pref')}</span><strong>${t(p.temp)}</strong></div>
-        <div class="list-item"><span>${ICONS_SM.building}${t('floor_pref')}</span><strong>${t(p.floor)}</strong></div>
-        <div class="list-item"><span>${ICONS_SM.gift}${t('occasion')}</span><strong>${t(p.occasion)}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.clock}${t('arrival_time')}</span><strong>${escapeHtml(p.arrivalTime)}</strong></div>
+        ${p.flightNo?`<div class="list-item"><span>${ICONS_SM.plane}${t('flight_no')}</span><strong>${escapeHtml(p.flightNo)}</strong></div>`:''}
+        <div class="list-item"><span>${ICONS_SM.bed}${t('pillow_type')}</span><strong>${escapeHtml(t(p.pillow))}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.thermo}${t('room_temp_pref')}</span><strong>${escapeHtml(t(p.temp))}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.building}${t('floor_pref')}</span><strong>${escapeHtml(t(p.floor))}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.gift}${t('occasion')}</span><strong>${escapeHtml(t(p.occasion))}</strong></div>
         <div class="list-item"><span>${ICONS_SM.alarm}${t('early_checkin')}</span><strong>${p.earlyCheckin?ICONS_SM.check:'—'}</strong></div>
-        ${p.notes?`<div class="list-item"><span>${ICONS_SM.note}${t('special_requests')}</span><strong>${p.notes}</strong></div>`:''}
+        ${p.notes?`<div class="list-item"><span>${ICONS_SM.note}${t('special_requests')}</span><strong>${escapeHtml(p.notes)}</strong></div>`:''}
       </div>
       <button class="btn secondary full" onclick="nav('dashboard')">${t('nav_dashboard')}</button>
     `;
@@ -1637,8 +1639,8 @@ prearrival(){
     ${pageHead(t('nav_prearrival'), LANG==='ar'?'خبّرنا بموعد وصولك وتفضيلاتك عشان نجهز غرفتك قبل ما توصل':"Tell us your arrival time and preferences so we can prepare your room before you arrive")}
     <div class="card">
       <div class="grid grid-2">
-        <div class="field"><label>${t('arrival_time')}</label><input type="time" id="pa-time" value="${p.arrivalTime}"></div>
-        <div class="field"><label>${t('flight_no')}</label><input id="pa-flight" placeholder="SV1234" value="${p.flightNo}"></div>
+        <div class="field"><label>${t('arrival_time')}</label><input type="time" id="pa-time" value="${escapeHtml(p.arrivalTime)}"></div>
+        <div class="field"><label>${t('flight_no')}</label><input id="pa-flight" placeholder="SV1234" value="${escapeHtml(p.flightNo)}"></div>
       </div>
       <div class="grid grid-2">
         <div class="field"><label>${t('pillow_type')}</label>
@@ -1678,7 +1680,7 @@ prearrival(){
       </div>
       <div class="field">
         <label>${t('special_requests')}</label>
-        <textarea id="pa-notes" rows="3">${p.notes}</textarea>
+        <textarea id="pa-notes" rows="3">${escapeHtml(p.notes)}</textarea>
       </div>
       <button class="btn full" onclick="submitPreArrival()">${t('submit_prearrival')}</button>
     </div>
@@ -1689,7 +1691,7 @@ dashboard(){
   const quick = ['reception','dining','housekeeping','concierge','spa','taxi','maintenance','billing'];
   const showBanner = !S.preArrival.submitted;
   return `
-    ${pageHead(`${t('greeting')}, ${S.guest.name||'Guest'}`, `${t('room_label')} ${S.guest.room||'-'} · ${t('room_type')} · ${S.guest.hotelName||t('hotel_name')}`)}
+    ${pageHead(`${t('greeting')}, ${escapeHtml(S.guest.name||'Guest')}`, `${t('room_label')} ${escapeHtml(S.guest.room||'-')} · ${t('room_type')} · ${escapeHtml(S.guest.hotelName||t('hotel_name'))}`)}
     ${showBanner?`
       <div class="banner">
         <div>
@@ -1703,7 +1705,7 @@ dashboard(){
       ${quick.map(k=>`
         <div class="tile" onclick="nav('${k}')">
           <div class="ic">${ICONS[k]}</div>
-          <div class="tile-label">${t('nav_'+k)}</div>
+          <div class="tile-label">${escapeHtml(t('nav_'+k))}</div>
         </div>`).join('')}
     </div>
     <div class="grid grid-2">
@@ -1857,7 +1859,7 @@ maintenance(){
         <div class="field">
           <label>${t('issue_type')}</label>
           <select id="mt-cat">
-            ${cats.map(c=>`<option value="${c}">${t(c)}</option>`).join('')}
+            ${cats.map(c=>`<option value="${c}">${escapeHtml(t(c))}</option>`).join('')}
           </select>
         </div>
         <div class="field">
@@ -2020,7 +2022,7 @@ offers(){
           <div class="name">${escapeHtml(o.name)}</div>
           ${o.description ? `<div class="desc">${escapeHtml(o.description)}</div>` : ''}
           <div class="desc" style="margin-top:4px; font-weight:600; color:var(--accent2);">${Number(o.price)} ${escapeHtml(o.currency||'SAR')}</div>
-          <button class="btn sm" onclick="redeemOffer(${o.id}, this)">${t('redeem')}</button>
+          <button class="btn sm" onclick="redeemOffer(${Number(o.id)}, this)">${t('redeem')}</button>
         </div>`).join('')}
     </div>
   `;
@@ -2067,7 +2069,7 @@ checkout(){
   return `
     ${pageHead(t('nav_checkout'))}
     <div class="card">
-      <div class="row between"><span>${t('room_label')}</span><strong>${S.guest.room}</strong></div>
+      <div class="row between"><span>${t('room_label')}</span><strong>${escapeHtml(S.guest.room)}</strong></div>
       <div class="row between" style="margin-top:8px;"><span>${t('bill_total')}</span><strong style="color:var(--accent2)">${total} SAR</strong></div>
       <button class="btn full" style="margin-top:16px;" onclick="requestCheckout()">${t('request_checkout')}</button>
     </div>
@@ -2082,7 +2084,7 @@ function requestsList(dept){
   if(items.length===0) return '';
   return `<div class="card" style="margin-top:18px;">
     <strong style="display:block; margin-bottom:10px;">${LANG==='ar'?'طلباتي':'My Requests'}</strong>
-    ${items.map(r=>`<div class="list-item"><span>${opsTitle(r)}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
+    ${items.map(r=>`<div class="list-item"><span>${escapeHtml(opsTitle(r))}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
   </div>`;
 }
 async function pushRequest(dept, title){
@@ -2602,7 +2604,7 @@ function buildStaffNav(){
   if(!sidenav || !bottomnav) return;
   sidenav.innerHTML=''; bottomnav.innerHTML='';
   items.forEach(key=>{
-    const label = key==='requests' && S.staff.role==='dept' ? t('nav_'+S.staff.dept) : t('staff_nav_'+key);
+    const label = key==='requests' && S.staff.role==='dept' ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('staff_nav_'+key));
     const html = `<div class="nav-item ${STAFF_CURRENT===key?'active':''}" onclick="staffNav('${key}')">${STAFF_ICONS[key]}<span>${label}</span></div>`;
     sidenav.insertAdjacentHTML('beforeend', html);
     bottomnav.insertAdjacentHTML('beforeend', html);
@@ -2836,13 +2838,13 @@ function formatShortDate(iso){
 function hpTabsBar(){
   return `<div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
     ${HOTEL_PROFILE_TABS.map(([key,labelKey])=>`
-      <button class="btn sm ${ADMIN_HOTEL_PROFILE_TAB===key?'':'secondary'}" onclick="setHotelProfileTab('${key}')">${t(labelKey)}</button>
+      <button class="btn sm ${ADMIN_HOTEL_PROFILE_TAB===key?'':'secondary'}" onclick="setHotelProfileTab('${key}')">${escapeHtml(t(labelKey))}</button>
     `).join('')}
   </div>`;
 }
 function hpEmptyState(loaded, msgKey){
   if(loaded===null) return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
-  if(loaded.length===0) return `<div class="card"><p style="color:var(--muted)">${t(msgKey)}</p></div>`;
+  if(loaded.length===0) return `<div class="card"><p style="color:var(--muted)">${escapeHtml(t(msgKey))}</p></div>`;
   return null;
 }
 function hpOverviewTab(h){
@@ -2864,7 +2866,7 @@ function hpOverviewTab(h){
     <div class="card">
       <strong style="display:block; margin-bottom:8px;">${t('col_plan')} · ${t('col_billing')}</strong>
       <p style="color:var(--muted); font-size:13.5px; margin:0;">
-        ${t('plan_'+(h.plan||'essential'))} · ${t('billing_'+(h.billing_status||'active'))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
+        ${escapeHtml(t('plan_'+(h.plan||'essential')))} · ${escapeHtml(t('billing_'+(h.billing_status||'active')))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
       </p>
     </div>
   `;
@@ -2882,7 +2884,7 @@ function hpIdentityTab(h){
         <div class="field"><label>${t('setting_whatsapp')}</label><input id="hs-whatsapp" value="${escapeHtml(h.contact_whatsapp||'')}" placeholder="+966 5X XXX XXXX"></div>
         <div class="field"><label>${t('setting_logo_url')}</label><input id="hs-logo" value="${escapeHtml(h.logo_url||'')}" placeholder="https://..."></div>
       </div>
-      <button class="btn" onclick="submitHotelIdentity(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelIdentity(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
   `;
 }
@@ -2894,11 +2896,11 @@ function hpDepartmentsTab(h){
         ${ALL_DEPARTMENTS.map(d=>`
           <label class="row" style="gap:6px; font-size:13.5px;">
             <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
-            <span>${t('nav_'+d)}</span>
+            <span>${escapeHtml(t('nav_'+d))}</span>
           </label>
         `).join('')}
       </div>
-      <button class="btn" onclick="submitHotelDepartments(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelDepartments(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
   `;
 }
@@ -2912,31 +2914,31 @@ function hpBillingTab(h){
     <div class="card">
       <div class="row between" style="margin-bottom:12px;">
         <strong>${t('billing_section')}</strong>
-        <button class="btn sm secondary" onclick="markHotelPaid(${h.id})">${t('mark_as_paid')}</button>
+        <button class="btn sm secondary" onclick="markHotelPaid(${Number(h.id)})">${t('mark_as_paid')}</button>
       </div>
       <div class="grid grid-2">
         <div class="field"><label>${t('setting_plan')}</label>
           <select id="hs-plan">
-            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${(h.plan||'essential')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${(h.plan||'essential')===p?'selected':''}>${escapeHtml(t('plan_'+p))}</option>`).join('')}
           </select>
           ${planLimitLine?`<div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(planLimitLine)}</div>`:''}
         </div>
         <div class="field"><label>${t('setting_plan_renewal')}</label><input id="hs-plan-renewal" type="date" value="${h.plan_renewal_date ? String(h.plan_renewal_date).slice(0,10) : ''}"></div>
         <div class="field"><label>${t('setting_billing_status')}</label>
           <select id="hs-billing-status">
-            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${escapeHtml(t('billing_'+s))}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>${t('setting_billing_amount')}</label><input id="hs-billing-amount" type="number" step="0.01" min="0" value="${h.billing_amount!=null?h.billing_amount:''}"></div>
         <div class="field"><label>${t('setting_billing_next_due')}</label><input id="hs-billing-next-due" type="date" value="${h.billing_next_due ? String(h.billing_next_due).slice(0,10) : ''}"></div>
       </div>
       <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
-      <button class="btn" onclick="submitHotelBilling(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelBilling(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
     <div class="card" style="margin-top:16px;">
       <div class="row between" style="margin-bottom:12px;">
         <strong>${t('invoices_section')}</strong>
-        <button class="btn sm secondary" onclick="showAddInvoiceForm(${h.id})">${t('add_invoice')}</button>
+        <button class="btn sm secondary" onclick="showAddInvoiceForm(${Number(h.id)})">${t('add_invoice')}</button>
       </div>
       <div id="hp-add-invoice-form" style="display:none;margin-bottom:14px;">
         <div class="grid grid-3">
@@ -2944,7 +2946,7 @@ function hpBillingTab(h){
           <div class="field"><label>${t('invoice_due_date')}</label><input id="hs-inv-due" type="date"></div>
           <div class="field"><label>${t('invoice_notes')}</label><input id="hs-inv-notes" type="text"></div>
         </div>
-        <button class="btn sm" onclick="submitAddInvoice(${h.id}, this)">${t('add_invoice')}</button>
+        <button class="btn sm" onclick="submitAddInvoice(${Number(h.id)}, this)">${t('add_invoice')}</button>
       </div>
       ${hpInvoicesTable(h.id, invoices)}
     </div>
@@ -2963,12 +2965,12 @@ function hpInvoicesTable(hotelId, invoices){
           <tr>
             <td>${inv.amount} ${inv.currency||'SAR'}</td>
             <td>${inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
-            <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${t('invoice_'+inv.status)}</span></td>
+            <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${escapeHtml(t('invoice_'+inv.status))}</span></td>
             <td>${escapeHtml(inv.notes||'')}</td>
             <td>
               ${inv.status==='pending'||inv.status==='overdue' ? `
-                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'paid')">${t('mark_invoice_paid')}</button>
-                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'cancelled')">${t('cancel_invoice')}</button>
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${Number(hotelId)}, ${Number(inv.id)}, 'paid')">${t('mark_invoice_paid')}</button>
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${Number(hotelId)}, ${Number(inv.id)}, 'cancelled')">${t('cancel_invoice')}</button>
               ` : ''}
             </td>
           </tr>
@@ -3045,9 +3047,9 @@ function hpRecoveryTab(h){
           ${data.map(c=>`
             <tr>
               <td>${escapeHtml(c.room_number||'-')}</td>
-              <td>${t('recovery_reason_'+c.trigger_reason)}</td>
-              <td><span class="pill ${c.status==='open'?'warn':c.status==='resolved'?'ok':''}">${t('recovery_status_'+c.status)}</span></td>
-              <td>${c.action_taken ? t('recovery_action_'+c.action_taken) : '-'}</td>
+              <td>${escapeHtml(t('recovery_reason_'+c.trigger_reason))}</td>
+              <td><span class="pill ${c.status==='open'?'warn':c.status==='resolved'?'ok':''}">${escapeHtml(t('recovery_status_'+c.status))}</span></td>
+              <td>${c.action_taken ? escapeHtml(t('recovery_action_'+c.action_taken)) : '-'}</td>
               <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td>
             </tr>`).join('')}
         </tbody>
@@ -3074,7 +3076,7 @@ function hpRevenueTab(h){
               <td>${escapeHtml(r.room_number||'-')}</td>
               <td>${escapeHtml(r.offer_name)}</td>
               <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
-              <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+              <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${escapeHtml(t('redemption_status_'+r.status))}</span></td>
               <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
             </tr>`).join('')}
         </tbody>
@@ -3089,7 +3091,7 @@ function hpIntegrationTab(h){
         <input type="checkbox" id="hs-concierge-enabled" ${h.concierge_enabled!==false?'checked':''}>
         <span>${t('setting_concierge_enabled')}</span>
       </label>
-      <button class="btn" onclick="submitHotelIntegration(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelIntegration(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
   `;
 }
@@ -3105,9 +3107,9 @@ function hpStaffTab(h){
           ${list.map(u=>`
             <tr>
               <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
-              <td>${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''}</td>
+              <td>${roleLabel(u.role)}${u.department?' · '+escapeHtml(t('nav_'+u.department)):''}</td>
               <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
-              <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
+              <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${Number(u.id)}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -3147,7 +3149,7 @@ function hpRequestsTab(h){
           ${data.map(r=>`
             <tr>
               <td>${escapeHtml(r.room_number||'-')}</td>
-              <td>${t('nav_'+r.department)}</td>
+              <td>${escapeHtml(t('nav_'+r.department))}</td>
               <td><span class="pill">${r.status}</span></td>
               <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
             </tr>`).join('')}
@@ -3224,7 +3226,7 @@ function hpAlertsTab(h){
     <div class="card">
       ${data.map(a=>`
         <div class="list-item">
-          <span><span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${t('alert_'+a.type)}</span></span>
+          <span><span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${escapeHtml(t('alert_'+a.type))}</span></span>
           <span style="color:var(--muted); font-size:12px;">${escapeHtml(JSON.stringify(a.meta||{}))}</span>
         </div>
       `).join('')}
@@ -3252,10 +3254,10 @@ function hpDangerTab(h){
   return `
     <div class="card">
       <div class="row" style="gap:8px; flex-wrap:wrap;">
-        <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+        <button class="btn sm secondary" onclick="toggleHotelActive(${Number(h.id)}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
         ${isArchived
-          ? `<button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>`
-          : `<button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>`}
+          ? `<button class="btn sm secondary" onclick="unarchiveHotel(${Number(h.id)})">${t('unarchive_hotel')}</button>`
+          : `<button class="btn sm secondary" onclick="archiveHotel(${Number(h.id)})">${t('archive_hotel')}</button>`}
       </div>
       <p style="color:var(--muted); font-size:12.5px; margin-top:12px;">${t('hp_danger_note')}</p>
     </div>
@@ -3306,7 +3308,7 @@ const STAFF_RENDERERS = {
 
     if(!d){
       return `
-        ${pageHead(t('dashboard_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+        ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
         ${headerControls}
         <div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>
       `;
@@ -3319,7 +3321,7 @@ const STAFF_RENDERERS = {
     const topAlerts = (ADMIN_ALERTS||[]).slice(0,3);
 
     return `
-      ${pageHead(t('dashboard_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       ${headerControls}
 
       <strong style="display:block; margin:0 0 10px; font-size:13px; color:var(--muted);">${t('dashboard_period_section')}</strong>
@@ -3392,7 +3394,7 @@ const STAFF_RENDERERS = {
       {label:t('kpi_revenue'), value:'18,420 SAR'},
     ];
     return `
-      ${pageHead(t('staff_nav_overview'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_overview'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpis.map(k=>`<div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${k.label}</div><div style="font-size:26px; font-weight:700;">${k.value}</div></div>`).join('')}
       </div>
@@ -3426,25 +3428,25 @@ const STAFF_RENDERERS = {
           <td><input type="checkbox" ${isArchived?'disabled':''} ${ADMIN_HOTELS_SELECTED.has(h.id)?'checked':''} onchange="toggleHotelSelected(${h.id}, this.checked)"></td>
           <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
           <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
-          <td>${t('plan_'+(h.plan||'essential'))}</td>
-          <td><span class="pill ${billingPillClass}">${t('billing_'+billingStatus)}</span></td>
+          <td>${escapeHtml(t('plan_'+(h.plan||'essential')))}</td>
+          <td><span class="pill ${billingPillClass}">${escapeHtml(t('billing_'+billingStatus))}</span></td>
           <td class="num">${deptCount}/${ALL_DEPARTMENTS.length}</td>
           <td>${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</td>
           <td class="actions">
             <div class="row" style="gap:6px; justify-content:flex-end;">
               ${isArchived ? `
-                <button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>
+                <button class="btn sm secondary" onclick="unarchiveHotel(${Number(h.id)})">${t('unarchive_hotel')}</button>
               ` : `
-                <button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button>
-                <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
-                <button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>
+                <button class="btn sm secondary" onclick="openHotelSettings(${Number(h.id)})">${t('hotel_settings')}</button>
+                <button class="btn sm secondary" onclick="toggleHotelActive(${Number(h.id)}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+                <button class="btn sm secondary" onclick="archiveHotel(${Number(h.id)})">${t('archive_hotel')}</button>
               `}
             </div>
           </td>
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('staff_nav_hotels'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_hotels'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(ICONS_ADMIN.building, t('total_hotels'), fullList.length)}
         ${kpiCard(STAFF_ICONS.hotels, t('active_hotels'), activeCount)}
@@ -3483,14 +3485,14 @@ const STAFF_RENDERERS = {
           <label style="font-size:11px;">${t('filter_plan_label')}</label>
           <select onchange="setHotelsFilter('plan', this.value)">
             <option value="all" ${ADMIN_HOTELS_FILTER_PLAN==='all'?'selected':''}>${t('all_plans')}</option>
-            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${escapeHtml(t('plan_'+p))}</option>`).join('')}
           </select>
         </div>
         <div class="field" style="margin:0;">
           <label style="font-size:11px;">${t('filter_billing_label')}</label>
           <select onchange="setHotelsFilter('billing', this.value)">
             <option value="all" ${ADMIN_HOTELS_FILTER_BILLING==='all'?'selected':''}>${t('all_billing')}</option>
-            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${ADMIN_HOTELS_FILTER_BILLING===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${ADMIN_HOTELS_FILTER_BILLING===s?'selected':''}>${escapeHtml(t('billing_'+s))}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -3541,12 +3543,12 @@ const STAFF_RENDERERS = {
   analytics(){
     const a = ADMIN_ANALYTICS;
     if(!a){
-      return `${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
+      return `${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
     }
     const maxGuests = Math.max(1, ...a.perHotel.map(h=>h.active_guests||0));
     const maxReq = Math.max(1, ...a.perHotel.map(h=>h.open_requests||0));
     return `
-      ${pageHead(t('platform_analytics_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:14px;">
         ${kpiCard(STAFF_ICONS.hotels, t('total_hotels'), a.hotels.not_archived)}
         ${kpiCard(ICONS_ADMIN.building, t('active_hotels'), a.hotels.active)}
@@ -3602,14 +3604,14 @@ const STAFF_RENDERERS = {
       return `
         <tr data-search="${escapeHtml(searchKey)}">
           <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
-          <td>${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''}</td>
+          <td>${roleLabel(u.role)}${u.department?' · '+escapeHtml(t('nav_'+u.department)):''}</td>
           <td>${escapeHtml(u.hotel_name||'-')}</td>
           <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
-          <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
+          <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${Number(u.id)}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('platform_users_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('platform_users_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.users, t('platform_users_title'), list.length)}
         ${kpiCard(ICONS_ADMIN.power, t('active_users_kpi'), activeCount)}
@@ -3652,7 +3654,7 @@ const STAFF_RENDERERS = {
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('audit_log_title'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('audit_log_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.audit, t('audit_log_title'), list.length)}
       </div>
@@ -3683,11 +3685,11 @@ const STAFF_RENDERERS = {
     const overdueCount = all.filter(r=>r.slaStatus==='overdue').length;
     if(overdueOnly) all = all.filter(r=>r.slaStatus==='overdue');
     return `
-      ${pageHead(isDept ? t('nav_'+S.staff.dept) : t('staff_nav_requests'))}
+      ${pageHead(isDept ? escapeHtml(t('nav_'+S.staff.dept)) : t('staff_nav_requests'))}
       ${!isDept?`
         <div class="menu-cat-tabs">
           <button class="${filterDept==='all'?'active':''}" onclick="window.__staffDeptFilter='all'; staffRender();">${t('all_depts')}</button>
-          ${DEPTS_WITH_QUEUE.filter(d=>!S.staff.enabledDepartments || S.staff.enabledDepartments.includes(d)).map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${t('nav_'+d)}</button>`).join('')}
+          ${DEPTS_WITH_QUEUE.filter(d=>!S.staff.enabledDepartments || S.staff.enabledDepartments.includes(d)).map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${escapeHtml(t('nav_'+d))}</button>`).join('')}
         </div>`:''}
       <div class="row" style="margin-bottom:12px;">
         <button class="btn sm ${overdueOnly?'':'secondary'}" onclick="window.__staffSlaFilter=!window.__staffSlaFilter; staffRender();">
@@ -3699,13 +3701,13 @@ const STAFF_RENDERERS = {
         all.map(r=>`
           <div class="list-item" style="align-items:flex-start;">
             <div>
-              <div>${opsTitle(r)}</div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?t('nav_'+r.dept)+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
+              <div>${escapeHtml(opsTitle(r))}</div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?escapeHtml(t('nav_'+r.dept))+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
             </div>
             <div class="row" style="gap:6px;">
               ${slaPillLabel(r.slaStatus)?`<span class="pill ${slaPillClass(r.slaStatus)}">${slaPillLabel(r.slaStatus)}</span>`:''}
               <span class="pill ${statusPillClass(r.status)}">${statusLabel(r.status)}</span>
-              ${r.status!=='done'?`<button class="btn sm secondary" onclick="advanceStatus('${r.id}')">${r.status==='pending'?t('start'):t('complete')}</button>`:''}
+              ${r.status!=='done'?`<button class="btn sm secondary" onclick="advanceStatus(${Number(r.id)})">${r.status==='pending'?t('start'):t('complete')}</button>`:''}
             </div>
           </div>`).join('')}
       </div>
@@ -3720,8 +3722,8 @@ const STAFF_RENDERERS = {
         all.map(p=>`
           <div class="list-item" style="align-items:flex-start;">
             <div>
-              <div><strong>${p.name}</strong> — ${t('room_label')} ${p.room}</div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${ICONS_SM.clock}${p.arrivalTime} ${p.flightNo?ICONS_SM.plane+p.flightNo:''} · ${ICONS_SM.bed}${t(p.pillow)} · ${ICONS_SM.gift}${t(p.occasion)}</div>
+              <div><strong>${escapeHtml(p.name)}</strong> — ${t('room_label')} ${escapeHtml(p.room)}</div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${ICONS_SM.clock}${escapeHtml(p.arrivalTime)} ${p.flightNo?ICONS_SM.plane+escapeHtml(p.flightNo):''} · ${ICONS_SM.bed}${escapeHtml(t(p.pillow))} · ${ICONS_SM.gift}${escapeHtml(t(p.occasion))}</div>
             </div>
             ${p.earlyCheckin?`<span class="pill info">${t('early_checkin')}</span>`:''}
           </div>`).join('')}
@@ -3768,9 +3770,9 @@ const STAFF_RENDERERS = {
                 <td><strong>${escapeHtml(o.name)}</strong>${o.description?`<div style="color:var(--muted); font-size:11.5px;">${escapeHtml(o.description)}</div>`:''}</td>
                 <td>${Number(o.price)} ${escapeHtml(o.currency||'SAR')}</td>
                 <td>${o.min_stay_nights!=null ? o.min_stay_nights : t('offers_no_min_stay')}</td>
-                <td>${o.time_window ? t('window_'+o.time_window) : t('offers_no_window')}</td>
+                <td>${o.time_window ? escapeHtml(t('window_'+o.time_window)) : t('offers_no_window')}</td>
                 <td><span class="pill ${o.active?'':'danger'}">${o.active?t('status_active'):t('status_inactive')}</span></td>
-                <td class="actions"><button class="btn sm secondary" onclick="toggleOfferActive(${o.id}, ${!!o.active})">${o.active?t('deactivate'):t('activate')}</button></td>
+                <td class="actions"><button class="btn sm secondary" onclick="toggleOfferActive(${Number(o.id)}, ${!!o.active})">${o.active?t('deactivate'):t('activate')}</button></td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -3786,11 +3788,11 @@ const STAFF_RENDERERS = {
                 <td>${escapeHtml(r.room_number||'-')}</td>
                 <td>${escapeHtml(r.offer_name)}</td>
                 <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
-                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${escapeHtml(t('redemption_status_'+r.status))}</span></td>
                 <td class="actions">
                   ${r.status==='pending' ? `
-                    <button class="btn sm" onclick="setRedemptionStatus(${r.id},'confirmed')">${t('confirm_action')}</button>
-                    <button class="btn sm secondary" onclick="setRedemptionStatus(${r.id},'cancelled')">${t('cancel')}</button>
+                    <button class="btn sm" onclick="setRedemptionStatus(${Number(r.id)},'confirmed')">${t('confirm_action')}</button>
+                    <button class="btn sm secondary" onclick="setRedemptionStatus(${Number(r.id)},'cancelled')">${t('cancel')}</button>
                   ` : '-'}
                 </td>
               </tr>`).join('')}
@@ -3821,8 +3823,8 @@ const STAFF_RENDERERS = {
       <h3 style="margin:0 0 10px;">${t('billing_section')}</h3>
       <div class="card" style="margin-bottom:22px;">
         <div class="grid grid-2">
-          <div class="field"><label>${t('setting_plan')}</label><div>${t('plan_'+(billing.plan||'essential'))}</div></div>
-          <div class="field"><label>${t('setting_billing_status')}</label><div><span class="pill ${billing.billing_status==='overdue'||billing.billing_status==='suspended'?'danger':billing.billing_status==='active'?'ok':'warn'}">${t('billing_'+(billing.billing_status||'active'))}</span></div></div>
+          <div class="field"><label>${t('setting_plan')}</label><div>${escapeHtml(t('plan_'+(billing.plan||'essential')))}</div></div>
+          <div class="field"><label>${t('setting_billing_status')}</label><div><span class="pill ${billing.billing_status==='overdue'||billing.billing_status==='suspended'?'danger':billing.billing_status==='active'?'ok':'warn'}">${escapeHtml(t('billing_'+(billing.billing_status||'active')))}</span></div></div>
           <div class="field"><label>${t('setting_billing_amount')}</label><div>${billing.billing_amount!=null?billing.billing_amount:'-'}</div></div>
           <div class="field"><label>${t('setting_billing_next_due')}</label><div>${billing.billing_next_due?String(billing.billing_next_due).slice(0,10):'-'}</div></div>
         </div>
@@ -3838,7 +3840,7 @@ const STAFF_RENDERERS = {
               <tr>
                 <td>${inv.amount} ${inv.currency||'SAR'}</td>
                 <td>${inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
-                <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${t('invoice_'+inv.status)}</span></td>
+                <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${escapeHtml(t('invoice_'+inv.status))}</span></td>
                 <td>${escapeHtml(inv.notes||'')}</td>
               </tr>`).join('')}
           </tbody>
@@ -3859,7 +3861,7 @@ const STAFF_RENDERERS = {
                 <td>${escapeHtml(r.room_number||'-')}</td>
                 <td>${escapeHtml(r.offer_name)}</td>
                 <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
-                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${escapeHtml(t('redemption_status_'+r.status))}</span></td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -3873,7 +3875,7 @@ const STAFF_RENDERERS = {
     list.forEach(a=>{ if(counts[a.severity]!==undefined) counts[a.severity]++; });
     const sevIcon = {danger: ICONS_ADMIN.bolt, warn: STAFF_ICONS.alerts, info: ICONS_ADMIN.clockKpi};
     return `
-      ${pageHead(t('staff_nav_alerts'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_alerts'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(ICONS_ADMIN.bolt, t('alerts_critical_kpi'), counts.danger)}
         ${kpiCard(STAFF_ICONS.alerts, t('alerts_warning_kpi'), counts.warn)}
@@ -3885,7 +3887,7 @@ const STAFF_RENDERERS = {
           <div class="kpi-ic" style="background:${a.severity==='danger'?'rgba(168,73,60,.14)':a.severity==='warn'?'rgba(179,130,44,.14)':'rgba(156,139,107,.14)'}; color:${a.severity==='danger'?'var(--danger)':a.severity==='warn'?'var(--warn)':'var(--accent2)'};">${sevIcon[a.severity]||''}</div>
           <div style="flex:1;">
             <div class="row between">
-              <strong>${t('alert_'+a.type)}</strong>
+              <strong>${escapeHtml(t('alert_'+a.type))}</strong>
               <span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${a.severity}</span>
             </div>
             <div style="color:var(--muted); font-size:13px; margin-top:4px;">
@@ -3901,7 +3903,7 @@ const STAFF_RENDERERS = {
   },
   search(){
     return `
-      ${pageHead(t('staff_nav_search'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_search'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       ${searchBar('admin-global-search-input', t('search_placeholder_global'), 'onAdminGlobalSearchInput(this.value)')}
       <div id="admin-search-results">${renderAdminSearchResults()}</div>
     `;
@@ -3912,7 +3914,7 @@ const STAFF_RENDERERS = {
     const isFull = S.staff.adminScope !== 'readonly';
     const depts = s ? (s.default_enabled_departments||[]) : ALL_DEPARTMENTS;
     return `
-      ${pageHead(t('staff_nav_settings'), `${S.staff.name} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_settings'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       ${!isFull ? `<div class="card" style="margin-bottom:16px; border-color:var(--warn);"><span class="pill warn">${t('readonly_admin_notice')}</span></div>` : ''}
       ${!s ? `<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>` : `
       <div class="card" style="margin-bottom:16px;">
@@ -3929,7 +3931,7 @@ const STAFF_RENDERERS = {
           ${ALL_DEPARTMENTS.map(d=>`
             <label class="dept-check">
               <input type="checkbox" id="ps-dept-${d}" ${depts.includes(d)?'checked':''} ${isFull?'':'disabled'}>
-              <span>${t('nav_'+d)}</span>
+              <span>${escapeHtml(t('nav_'+d))}</span>
             </label>
           `).join('')}
         </div>
@@ -3967,9 +3969,9 @@ const STAFF_RENDERERS = {
               admins.map(a=>`
                 <tr>
                   <td><strong>${escapeHtml(a.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(a.email)}</div></td>
-                  <td>${t('admin_scope_'+(a.admin_scope||'full'))}</td>
+                  <td>${escapeHtml(t('admin_scope_'+(a.admin_scope||'full')))}</td>
                   <td><span class="pill ${a.active?'':'danger'}">${a.active?t('status_active'):t('status_inactive')}</span></td>
-                  <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${a.id}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button> <button class="btn sm ghost" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="deleteAdminPlatformAdmin(${a.id}, '${escapeHtml(a.email)}')">${t('delete_permanently')}</button>` : ''}</td>
+                  <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${Number(a.id)}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button> <button class="btn sm ghost" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="deleteAdminPlatformAdmin(${Number(a.id)})">${t('delete_permanently')}</button>` : ''}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3991,7 +3993,7 @@ function renderAdminSearchResults(){
   let html = '';
   if(r.hotels && r.hotels.length){
     html += `<strong style="display:block; margin:10px 0 6px; font-size:13px; color:var(--muted);">${t('search_results_hotels')}</strong><div class="card" style="margin-bottom:10px;">`;
-    html += r.hotels.map(h=>`<div class="list-item"><span><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></span><button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button></div>`).join('');
+    html += r.hotels.map(h=>`<div class="list-item"><span><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></span><button class="btn sm secondary" onclick="openHotelSettings(${Number(h.id)})">${t('hotel_settings')}</button></div>`).join('');
     html += `</div>`;
   }
   if(r.users && r.users.length){
