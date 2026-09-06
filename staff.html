@@ -888,7 +888,9 @@ async function toggleAdminPlatformAdminActive(id, currentActive){
     toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
   }
 }
-async function deleteAdminPlatformAdmin(id, email){
+async function deleteAdminPlatformAdmin(id){
+  const admin = ADMIN_PLATFORM_ADMINS.find(a=>a.id===id);
+  const email = admin ? admin.email : '';
   const msg = t('confirm_delete_admin') + (email ? ('\n\n' + email) : '');
   if(!confirm(msg)) return;
   try{
@@ -2020,7 +2022,7 @@ offers(){
           <div class="name">${escapeHtml(o.name)}</div>
           ${o.description ? `<div class="desc">${escapeHtml(o.description)}</div>` : ''}
           <div class="desc" style="margin-top:4px; font-weight:600; color:var(--accent2);">${Number(o.price)} ${escapeHtml(o.currency||'SAR')}</div>
-          <button class="btn sm" onclick="redeemOffer(${o.id}, this)">${t('redeem')}</button>
+          <button class="btn sm" onclick="redeemOffer(${Number(o.id)}, this)">${t('redeem')}</button>
         </div>`).join('')}
     </div>
   `;
@@ -2882,7 +2884,7 @@ function hpIdentityTab(h){
         <div class="field"><label>${t('setting_whatsapp')}</label><input id="hs-whatsapp" value="${escapeHtml(h.contact_whatsapp||'')}" placeholder="+966 5X XXX XXXX"></div>
         <div class="field"><label>${t('setting_logo_url')}</label><input id="hs-logo" value="${escapeHtml(h.logo_url||'')}" placeholder="https://..."></div>
       </div>
-      <button class="btn" onclick="submitHotelIdentity(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelIdentity(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
   `;
 }
@@ -2898,7 +2900,7 @@ function hpDepartmentsTab(h){
           </label>
         `).join('')}
       </div>
-      <button class="btn" onclick="submitHotelDepartments(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelDepartments(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
   `;
 }
@@ -2912,7 +2914,7 @@ function hpBillingTab(h){
     <div class="card">
       <div class="row between" style="margin-bottom:12px;">
         <strong>${t('billing_section')}</strong>
-        <button class="btn sm secondary" onclick="markHotelPaid(${h.id})">${t('mark_as_paid')}</button>
+        <button class="btn sm secondary" onclick="markHotelPaid(${Number(h.id)})">${t('mark_as_paid')}</button>
       </div>
       <div class="grid grid-2">
         <div class="field"><label>${t('setting_plan')}</label>
@@ -2931,12 +2933,12 @@ function hpBillingTab(h){
         <div class="field"><label>${t('setting_billing_next_due')}</label><input id="hs-billing-next-due" type="date" value="${h.billing_next_due ? String(h.billing_next_due).slice(0,10) : ''}"></div>
       </div>
       <div class="field" style="margin-top:10px;"><label>${t('setting_billing_notes')}</label><textarea id="hs-billing-notes" rows="2">${escapeHtml(h.billing_notes||'')}</textarea></div>
-      <button class="btn" onclick="submitHotelBilling(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelBilling(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
     <div class="card" style="margin-top:16px;">
       <div class="row between" style="margin-bottom:12px;">
         <strong>${t('invoices_section')}</strong>
-        <button class="btn sm secondary" onclick="showAddInvoiceForm(${h.id})">${t('add_invoice')}</button>
+        <button class="btn sm secondary" onclick="showAddInvoiceForm(${Number(h.id)})">${t('add_invoice')}</button>
       </div>
       <div id="hp-add-invoice-form" style="display:none;margin-bottom:14px;">
         <div class="grid grid-3">
@@ -2944,7 +2946,7 @@ function hpBillingTab(h){
           <div class="field"><label>${t('invoice_due_date')}</label><input id="hs-inv-due" type="date"></div>
           <div class="field"><label>${t('invoice_notes')}</label><input id="hs-inv-notes" type="text"></div>
         </div>
-        <button class="btn sm" onclick="submitAddInvoice(${h.id}, this)">${t('add_invoice')}</button>
+        <button class="btn sm" onclick="submitAddInvoice(${Number(h.id)}, this)">${t('add_invoice')}</button>
       </div>
       ${hpInvoicesTable(h.id, invoices)}
     </div>
@@ -2967,8 +2969,8 @@ function hpInvoicesTable(hotelId, invoices){
             <td>${escapeHtml(inv.notes||'')}</td>
             <td>
               ${inv.status==='pending'||inv.status==='overdue' ? `
-                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'paid')">${t('mark_invoice_paid')}</button>
-                <button class="btn xs secondary" onclick="setInvoiceStatus(${hotelId}, ${inv.id}, 'cancelled')">${t('cancel_invoice')}</button>
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${Number(hotelId)}, ${Number(inv.id)}, 'paid')">${t('mark_invoice_paid')}</button>
+                <button class="btn xs secondary" onclick="setInvoiceStatus(${Number(hotelId)}, ${Number(inv.id)}, 'cancelled')">${t('cancel_invoice')}</button>
               ` : ''}
             </td>
           </tr>
@@ -3089,7 +3091,7 @@ function hpIntegrationTab(h){
         <input type="checkbox" id="hs-concierge-enabled" ${h.concierge_enabled!==false?'checked':''}>
         <span>${t('setting_concierge_enabled')}</span>
       </label>
-      <button class="btn" onclick="submitHotelIntegration(${h.id}, this)">${t('save_changes')}</button>
+      <button class="btn" onclick="submitHotelIntegration(${Number(h.id)}, this)">${t('save_changes')}</button>
     </div>
   `;
 }
@@ -3107,7 +3109,7 @@ function hpStaffTab(h){
               <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
               <td>${roleLabel(u.role)}${u.department?' · '+escapeHtml(t('nav_'+u.department)):''}</td>
               <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
-              <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
+              <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${Number(u.id)}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -3252,10 +3254,10 @@ function hpDangerTab(h){
   return `
     <div class="card">
       <div class="row" style="gap:8px; flex-wrap:wrap;">
-        <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+        <button class="btn sm secondary" onclick="toggleHotelActive(${Number(h.id)}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
         ${isArchived
-          ? `<button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>`
-          : `<button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>`}
+          ? `<button class="btn sm secondary" onclick="unarchiveHotel(${Number(h.id)})">${t('unarchive_hotel')}</button>`
+          : `<button class="btn sm secondary" onclick="archiveHotel(${Number(h.id)})">${t('archive_hotel')}</button>`}
       </div>
       <p style="color:var(--muted); font-size:12.5px; margin-top:12px;">${t('hp_danger_note')}</p>
     </div>
@@ -3433,11 +3435,11 @@ const STAFF_RENDERERS = {
           <td class="actions">
             <div class="row" style="gap:6px; justify-content:flex-end;">
               ${isArchived ? `
-                <button class="btn sm secondary" onclick="unarchiveHotel(${h.id})">${t('unarchive_hotel')}</button>
+                <button class="btn sm secondary" onclick="unarchiveHotel(${Number(h.id)})">${t('unarchive_hotel')}</button>
               ` : `
-                <button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button>
-                <button class="btn sm secondary" onclick="toggleHotelActive(${h.id}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
-                <button class="btn sm secondary" onclick="archiveHotel(${h.id})">${t('archive_hotel')}</button>
+                <button class="btn sm secondary" onclick="openHotelSettings(${Number(h.id)})">${t('hotel_settings')}</button>
+                <button class="btn sm secondary" onclick="toggleHotelActive(${Number(h.id)}, ${!!h.active})">${h.active?t('deactivate'):t('activate')}</button>
+                <button class="btn sm secondary" onclick="archiveHotel(${Number(h.id)})">${t('archive_hotel')}</button>
               `}
             </div>
           </td>
@@ -3605,7 +3607,7 @@ const STAFF_RENDERERS = {
           <td>${roleLabel(u.role)}${u.department?' · '+escapeHtml(t('nav_'+u.department)):''}</td>
           <td>${escapeHtml(u.hotel_name||'-')}</td>
           <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
-          <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
+          <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${Number(u.id)}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
         </tr>`;
     }).join('');
     return `
@@ -3705,7 +3707,7 @@ const STAFF_RENDERERS = {
             <div class="row" style="gap:6px;">
               ${slaPillLabel(r.slaStatus)?`<span class="pill ${slaPillClass(r.slaStatus)}">${slaPillLabel(r.slaStatus)}</span>`:''}
               <span class="pill ${statusPillClass(r.status)}">${statusLabel(r.status)}</span>
-              ${r.status!=='done'?`<button class="btn sm secondary" onclick="advanceStatus('${r.id}')">${r.status==='pending'?t('start'):t('complete')}</button>`:''}
+              ${r.status!=='done'?`<button class="btn sm secondary" onclick="advanceStatus(${Number(r.id)})">${r.status==='pending'?t('start'):t('complete')}</button>`:''}
             </div>
           </div>`).join('')}
       </div>
@@ -3770,7 +3772,7 @@ const STAFF_RENDERERS = {
                 <td>${o.min_stay_nights!=null ? o.min_stay_nights : t('offers_no_min_stay')}</td>
                 <td>${o.time_window ? escapeHtml(t('window_'+o.time_window)) : t('offers_no_window')}</td>
                 <td><span class="pill ${o.active?'':'danger'}">${o.active?t('status_active'):t('status_inactive')}</span></td>
-                <td class="actions"><button class="btn sm secondary" onclick="toggleOfferActive(${o.id}, ${!!o.active})">${o.active?t('deactivate'):t('activate')}</button></td>
+                <td class="actions"><button class="btn sm secondary" onclick="toggleOfferActive(${Number(o.id)}, ${!!o.active})">${o.active?t('deactivate'):t('activate')}</button></td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -3789,8 +3791,8 @@ const STAFF_RENDERERS = {
                 <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${escapeHtml(t('redemption_status_'+r.status))}</span></td>
                 <td class="actions">
                   ${r.status==='pending' ? `
-                    <button class="btn sm" onclick="setRedemptionStatus(${r.id},'confirmed')">${t('confirm_action')}</button>
-                    <button class="btn sm secondary" onclick="setRedemptionStatus(${r.id},'cancelled')">${t('cancel')}</button>
+                    <button class="btn sm" onclick="setRedemptionStatus(${Number(r.id)},'confirmed')">${t('confirm_action')}</button>
+                    <button class="btn sm secondary" onclick="setRedemptionStatus(${Number(r.id)},'cancelled')">${t('cancel')}</button>
                   ` : '-'}
                 </td>
               </tr>`).join('')}
@@ -3969,7 +3971,7 @@ const STAFF_RENDERERS = {
                   <td><strong>${escapeHtml(a.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(a.email)}</div></td>
                   <td>${escapeHtml(t('admin_scope_'+(a.admin_scope||'full')))}</td>
                   <td><span class="pill ${a.active?'':'danger'}">${a.active?t('status_active'):t('status_inactive')}</span></td>
-                  <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${a.id}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button> <button class="btn sm ghost" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="deleteAdminPlatformAdmin(${a.id}, '${escapeHtml(a.email)}')">${t('delete_permanently')}</button>` : ''}</td>
+                  <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${Number(a.id)}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button> <button class="btn sm ghost" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="deleteAdminPlatformAdmin(${Number(a.id)})">${t('delete_permanently')}</button>` : ''}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3991,7 +3993,7 @@ function renderAdminSearchResults(){
   let html = '';
   if(r.hotels && r.hotels.length){
     html += `<strong style="display:block; margin:10px 0 6px; font-size:13px; color:var(--muted);">${t('search_results_hotels')}</strong><div class="card" style="margin-bottom:10px;">`;
-    html += r.hotels.map(h=>`<div class="list-item"><span><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></span><button class="btn sm secondary" onclick="openHotelSettings(${h.id})">${t('hotel_settings')}</button></div>`).join('');
+    html += r.hotels.map(h=>`<div class="list-item"><span><strong>${escapeHtml(h.name)}</strong> <span style="color:var(--muted); font-size:12px;">(${escapeHtml(h.slug)})</span></span><button class="btn sm secondary" onclick="openHotelSettings(${Number(h.id)})">${t('hotel_settings')}</button></div>`).join('');
     html += `</div>`;
   }
   if(r.users && r.users.length){
