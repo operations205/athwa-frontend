@@ -2106,8 +2106,8 @@ function customRequest(dept, textareaId){
 function submitMaintenance(){
   const cat = document.getElementById('mt-cat').value;
   const urgency = document.getElementById('mt-urgency').value;
-  const desc = document.getElementById('mt-desc').value.trim() || escapeHtml(t(cat));
-  pushRequest('maintenance', `${escapeHtml(t(cat))} · ${urgency==='urgent'?t('urgent'):t('normal')} · ${desc}`);
+  const desc = document.getElementById('mt-desc').value.trim() || t(cat);
+  pushRequest('maintenance', `${t(cat)} · ${urgency==='urgent'?t('urgent'):t('normal')} · ${desc}`);
   document.getElementById('mt-desc').value='';
 }
 async function submitPreArrival(){
@@ -2437,7 +2437,7 @@ function staffLogout(){
 }
 function updateStaffRoleLabel(){
   const el = document.getElementById('staff-role-label');
-  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('role_'+S.staff.role)));
+  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? t('nav_'+S.staff.dept) : t('role_'+S.staff.role));
 }
 
 /* ---------------- Staff nav ---------------- */
