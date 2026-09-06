@@ -1385,7 +1385,7 @@ function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
 // the DICT only distinguishes owner/manager/department-level/platform roles.
 function roleLabel(role){
   if(role==='dept_manager' || role==='staff') return t('role_dept');
-  return t('role_'+role);
+  return escapeHtml(t('role_'+role));
 }
 
 function applyLang(){
@@ -1567,7 +1567,7 @@ function buildNav(){
   const enabled = S.guest && S.guest.enabledDepartments;
   const items = NAV_ITEMS.filter(key => !ALL_DEPARTMENTS.includes(key) || !enabled || enabled.includes(key));
   items.forEach(key=>{
-    const label = t('nav_'+key);
+    const label = escapeHtml(t('nav_'+key));
     const html = `<div class="nav-item ${CURRENT===key?'active':''}" onclick="nav('${key}')">${ICONS[key]}<span>${label}</span></div>`;
     sidenav.insertAdjacentHTML('beforeend', html);
     bottomnav.insertAdjacentHTML('beforeend', html);
@@ -1623,10 +1623,10 @@ prearrival(){
         </div>
         <div class="list-item"><span>${ICONS_SM.clock}${t('arrival_time')}</span><strong>${escapeHtml(p.arrivalTime)}</strong></div>
         ${p.flightNo?`<div class="list-item"><span>${ICONS_SM.plane}${t('flight_no')}</span><strong>${escapeHtml(p.flightNo)}</strong></div>`:''}
-        <div class="list-item"><span>${ICONS_SM.bed}${t('pillow_type')}</span><strong>${t(p.pillow)}</strong></div>
-        <div class="list-item"><span>${ICONS_SM.thermo}${t('room_temp_pref')}</span><strong>${t(p.temp)}</strong></div>
-        <div class="list-item"><span>${ICONS_SM.building}${t('floor_pref')}</span><strong>${t(p.floor)}</strong></div>
-        <div class="list-item"><span>${ICONS_SM.gift}${t('occasion')}</span><strong>${t(p.occasion)}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.bed}${t('pillow_type')}</span><strong>${escapeHtml(t(p.pillow))}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.thermo}${t('room_temp_pref')}</span><strong>${escapeHtml(t(p.temp))}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.building}${t('floor_pref')}</span><strong>${escapeHtml(t(p.floor))}</strong></div>
+        <div class="list-item"><span>${ICONS_SM.gift}${t('occasion')}</span><strong>${escapeHtml(t(p.occasion))}</strong></div>
         <div class="list-item"><span>${ICONS_SM.alarm}${t('early_checkin')}</span><strong>${p.earlyCheckin?ICONS_SM.check:'—'}</strong></div>
         ${p.notes?`<div class="list-item"><span>${ICONS_SM.note}${t('special_requests')}</span><strong>${escapeHtml(p.notes)}</strong></div>`:''}
       </div>
@@ -1703,7 +1703,7 @@ dashboard(){
       ${quick.map(k=>`
         <div class="tile" onclick="nav('${k}')">
           <div class="ic">${ICONS[k]}</div>
-          <div class="tile-label">${t('nav_'+k)}</div>
+          <div class="tile-label">${escapeHtml(t('nav_'+k))}</div>
         </div>`).join('')}
     </div>
     <div class="grid grid-2">
@@ -1857,7 +1857,7 @@ maintenance(){
         <div class="field">
           <label>${t('issue_type')}</label>
           <select id="mt-cat">
-            ${cats.map(c=>`<option value="${c}">${t(c)}</option>`).join('')}
+            ${cats.map(c=>`<option value="${c}">${escapeHtml(t(c))}</option>`).join('')}
           </select>
         </div>
         <div class="field">
@@ -2106,8 +2106,8 @@ function customRequest(dept, textareaId){
 function submitMaintenance(){
   const cat = document.getElementById('mt-cat').value;
   const urgency = document.getElementById('mt-urgency').value;
-  const desc = document.getElementById('mt-desc').value.trim() || t(cat);
-  pushRequest('maintenance', `${t(cat)} · ${urgency==='urgent'?t('urgent'):t('normal')} · ${desc}`);
+  const desc = document.getElementById('mt-desc').value.trim() || escapeHtml(t(cat));
+  pushRequest('maintenance', `${escapeHtml(t(cat))} · ${urgency==='urgent'?t('urgent'):t('normal')} · ${desc}`);
   document.getElementById('mt-desc').value='';
 }
 async function submitPreArrival(){
@@ -2437,7 +2437,7 @@ function staffLogout(){
 }
 function updateStaffRoleLabel(){
   const el = document.getElementById('staff-role-label');
-  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? t('nav_'+S.staff.dept) : t('role_'+S.staff.role));
+  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('role_'+S.staff.role)));
 }
 
 /* ---------------- Staff nav ---------------- */
@@ -2602,7 +2602,7 @@ function buildStaffNav(){
   if(!sidenav || !bottomnav) return;
   sidenav.innerHTML=''; bottomnav.innerHTML='';
   items.forEach(key=>{
-    const label = key==='requests' && S.staff.role==='dept' ? t('nav_'+S.staff.dept) : t('staff_nav_'+key);
+    const label = key==='requests' && S.staff.role==='dept' ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('staff_nav_'+key));
     const html = `<div class="nav-item ${STAFF_CURRENT===key?'active':''}" onclick="staffNav('${key}')">${STAFF_ICONS[key]}<span>${label}</span></div>`;
     sidenav.insertAdjacentHTML('beforeend', html);
     bottomnav.insertAdjacentHTML('beforeend', html);
@@ -2836,13 +2836,13 @@ function formatShortDate(iso){
 function hpTabsBar(){
   return `<div class="row" style="gap:6px; flex-wrap:wrap; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
     ${HOTEL_PROFILE_TABS.map(([key,labelKey])=>`
-      <button class="btn sm ${ADMIN_HOTEL_PROFILE_TAB===key?'':'secondary'}" onclick="setHotelProfileTab('${key}')">${t(labelKey)}</button>
+      <button class="btn sm ${ADMIN_HOTEL_PROFILE_TAB===key?'':'secondary'}" onclick="setHotelProfileTab('${key}')">${escapeHtml(t(labelKey))}</button>
     `).join('')}
   </div>`;
 }
 function hpEmptyState(loaded, msgKey){
   if(loaded===null) return `<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
-  if(loaded.length===0) return `<div class="card"><p style="color:var(--muted)">${t(msgKey)}</p></div>`;
+  if(loaded.length===0) return `<div class="card"><p style="color:var(--muted)">${escapeHtml(t(msgKey))}</p></div>`;
   return null;
 }
 function hpOverviewTab(h){
@@ -2864,7 +2864,7 @@ function hpOverviewTab(h){
     <div class="card">
       <strong style="display:block; margin-bottom:8px;">${t('col_plan')} · ${t('col_billing')}</strong>
       <p style="color:var(--muted); font-size:13.5px; margin:0;">
-        ${t('plan_'+(h.plan||'essential'))} · ${t('billing_'+(h.billing_status||'active'))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
+        ${escapeHtml(t('plan_'+(h.plan||'essential')))} · ${escapeHtml(t('billing_'+(h.billing_status||'active')))}${h.billing_amount!=null?(' · '+h.billing_amount+' '+(h.currency||'SAR')):''}
       </p>
     </div>
   `;
@@ -2894,7 +2894,7 @@ function hpDepartmentsTab(h){
         ${ALL_DEPARTMENTS.map(d=>`
           <label class="row" style="gap:6px; font-size:13.5px;">
             <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
-            <span>${t('nav_'+d)}</span>
+            <span>${escapeHtml(t('nav_'+d))}</span>
           </label>
         `).join('')}
       </div>
@@ -2917,14 +2917,14 @@ function hpBillingTab(h){
       <div class="grid grid-2">
         <div class="field"><label>${t('setting_plan')}</label>
           <select id="hs-plan">
-            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${(h.plan||'essential')===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${(h.plan||'essential')===p?'selected':''}>${escapeHtml(t('plan_'+p))}</option>`).join('')}
           </select>
           ${planLimitLine?`<div class="muted" style="font-size:12px;margin-top:4px;">${escapeHtml(planLimitLine)}</div>`:''}
         </div>
         <div class="field"><label>${t('setting_plan_renewal')}</label><input id="hs-plan-renewal" type="date" value="${h.plan_renewal_date ? String(h.plan_renewal_date).slice(0,10) : ''}"></div>
         <div class="field"><label>${t('setting_billing_status')}</label>
           <select id="hs-billing-status">
-            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${(h.billing_status||'active')===s?'selected':''}>${escapeHtml(t('billing_'+s))}</option>`).join('')}
           </select>
         </div>
         <div class="field"><label>${t('setting_billing_amount')}</label><input id="hs-billing-amount" type="number" step="0.01" min="0" value="${h.billing_amount!=null?h.billing_amount:''}"></div>
@@ -2963,7 +2963,7 @@ function hpInvoicesTable(hotelId, invoices){
           <tr>
             <td>${inv.amount} ${inv.currency||'SAR'}</td>
             <td>${inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
-            <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${t('invoice_'+inv.status)}</span></td>
+            <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${escapeHtml(t('invoice_'+inv.status))}</span></td>
             <td>${escapeHtml(inv.notes||'')}</td>
             <td>
               ${inv.status==='pending'||inv.status==='overdue' ? `
@@ -3045,9 +3045,9 @@ function hpRecoveryTab(h){
           ${data.map(c=>`
             <tr>
               <td>${escapeHtml(c.room_number||'-')}</td>
-              <td>${t('recovery_reason_'+c.trigger_reason)}</td>
-              <td><span class="pill ${c.status==='open'?'warn':c.status==='resolved'?'ok':''}">${t('recovery_status_'+c.status)}</span></td>
-              <td>${c.action_taken ? t('recovery_action_'+c.action_taken) : '-'}</td>
+              <td>${escapeHtml(t('recovery_reason_'+c.trigger_reason))}</td>
+              <td><span class="pill ${c.status==='open'?'warn':c.status==='resolved'?'ok':''}">${escapeHtml(t('recovery_status_'+c.status))}</span></td>
+              <td>${c.action_taken ? escapeHtml(t('recovery_action_'+c.action_taken)) : '-'}</td>
               <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : '-'}</td>
             </tr>`).join('')}
         </tbody>
@@ -3074,7 +3074,7 @@ function hpRevenueTab(h){
               <td>${escapeHtml(r.room_number||'-')}</td>
               <td>${escapeHtml(r.offer_name)}</td>
               <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
-              <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+              <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${escapeHtml(t('redemption_status_'+r.status))}</span></td>
               <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
             </tr>`).join('')}
         </tbody>
@@ -3105,7 +3105,7 @@ function hpStaffTab(h){
           ${list.map(u=>`
             <tr>
               <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
-              <td>${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''}</td>
+              <td>${roleLabel(u.role)}${u.department?' · '+escapeHtml(t('nav_'+u.department)):''}</td>
               <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
               <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
             </tr>`).join('')}
@@ -3147,7 +3147,7 @@ function hpRequestsTab(h){
           ${data.map(r=>`
             <tr>
               <td>${escapeHtml(r.room_number||'-')}</td>
-              <td>${t('nav_'+r.department)}</td>
+              <td>${escapeHtml(t('nav_'+r.department))}</td>
               <td><span class="pill">${r.status}</span></td>
               <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
             </tr>`).join('')}
@@ -3224,7 +3224,7 @@ function hpAlertsTab(h){
     <div class="card">
       ${data.map(a=>`
         <div class="list-item">
-          <span><span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${t('alert_'+a.type)}</span></span>
+          <span><span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${escapeHtml(t('alert_'+a.type))}</span></span>
           <span style="color:var(--muted); font-size:12px;">${escapeHtml(JSON.stringify(a.meta||{}))}</span>
         </div>
       `).join('')}
@@ -3306,7 +3306,7 @@ const STAFF_RENDERERS = {
 
     if(!d){
       return `
-        ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+        ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
         ${headerControls}
         <div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>
       `;
@@ -3319,7 +3319,7 @@ const STAFF_RENDERERS = {
     const topAlerts = (ADMIN_ALERTS||[]).slice(0,3);
 
     return `
-      ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('dashboard_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       ${headerControls}
 
       <strong style="display:block; margin:0 0 10px; font-size:13px; color:var(--muted);">${t('dashboard_period_section')}</strong>
@@ -3392,7 +3392,7 @@ const STAFF_RENDERERS = {
       {label:t('kpi_revenue'), value:'18,420 SAR'},
     ];
     return `
-      ${pageHead(t('staff_nav_overview'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_overview'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpis.map(k=>`<div class="card"><div style="color:var(--muted); font-size:12.5px; margin-bottom:6px;">${k.label}</div><div style="font-size:26px; font-weight:700;">${k.value}</div></div>`).join('')}
       </div>
@@ -3426,8 +3426,8 @@ const STAFF_RENDERERS = {
           <td><input type="checkbox" ${isArchived?'disabled':''} ${ADMIN_HOTELS_SELECTED.has(h.id)?'checked':''} onchange="toggleHotelSelected(${h.id}, this.checked)"></td>
           <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
           <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
-          <td>${t('plan_'+(h.plan||'essential'))}</td>
-          <td><span class="pill ${billingPillClass}">${t('billing_'+billingStatus)}</span></td>
+          <td>${escapeHtml(t('plan_'+(h.plan||'essential')))}</td>
+          <td><span class="pill ${billingPillClass}">${escapeHtml(t('billing_'+billingStatus))}</span></td>
           <td class="num">${deptCount}/${ALL_DEPARTMENTS.length}</td>
           <td>${h.created_at ? new Date(h.created_at).toLocaleDateString() : '-'}</td>
           <td class="actions">
@@ -3444,7 +3444,7 @@ const STAFF_RENDERERS = {
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('staff_nav_hotels'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_hotels'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(ICONS_ADMIN.building, t('total_hotels'), fullList.length)}
         ${kpiCard(STAFF_ICONS.hotels, t('active_hotels'), activeCount)}
@@ -3483,14 +3483,14 @@ const STAFF_RENDERERS = {
           <label style="font-size:11px;">${t('filter_plan_label')}</label>
           <select onchange="setHotelsFilter('plan', this.value)">
             <option value="all" ${ADMIN_HOTELS_FILTER_PLAN==='all'?'selected':''}>${t('all_plans')}</option>
-            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${t('plan_'+p)}</option>`).join('')}
+            ${['essential','performance','portfolio'].map(p=>`<option value="${p}" ${ADMIN_HOTELS_FILTER_PLAN===p?'selected':''}>${escapeHtml(t('plan_'+p))}</option>`).join('')}
           </select>
         </div>
         <div class="field" style="margin:0;">
           <label style="font-size:11px;">${t('filter_billing_label')}</label>
           <select onchange="setHotelsFilter('billing', this.value)">
             <option value="all" ${ADMIN_HOTELS_FILTER_BILLING==='all'?'selected':''}>${t('all_billing')}</option>
-            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${ADMIN_HOTELS_FILTER_BILLING===s?'selected':''}>${t('billing_'+s)}</option>`).join('')}
+            ${['active','trial','overdue','suspended'].map(s=>`<option value="${s}" ${ADMIN_HOTELS_FILTER_BILLING===s?'selected':''}>${escapeHtml(t('billing_'+s))}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -3541,12 +3541,12 @@ const STAFF_RENDERERS = {
   analytics(){
     const a = ADMIN_ANALYTICS;
     if(!a){
-      return `${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
+      return `${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>`;
     }
     const maxGuests = Math.max(1, ...a.perHotel.map(h=>h.active_guests||0));
     const maxReq = Math.max(1, ...a.perHotel.map(h=>h.open_requests||0));
     return `
-      ${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('platform_analytics_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:14px;">
         ${kpiCard(STAFF_ICONS.hotels, t('total_hotels'), a.hotels.not_archived)}
         ${kpiCard(ICONS_ADMIN.building, t('active_hotels'), a.hotels.active)}
@@ -3602,14 +3602,14 @@ const STAFF_RENDERERS = {
       return `
         <tr data-search="${escapeHtml(searchKey)}">
           <td><strong>${escapeHtml(u.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(u.email)}</div></td>
-          <td>${roleLabel(u.role)}${u.department?' · '+t('nav_'+u.department):''}</td>
+          <td>${roleLabel(u.role)}${u.department?' · '+escapeHtml(t('nav_'+u.department)):''}</td>
           <td>${escapeHtml(u.hotel_name||'-')}</td>
           <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
           <td class="actions"><button class="btn sm secondary" onclick="toggleAdminUserActive(${u.id}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button></td>
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('platform_users_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('platform_users_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.users, t('platform_users_title'), list.length)}
         ${kpiCard(ICONS_ADMIN.power, t('active_users_kpi'), activeCount)}
@@ -3652,7 +3652,7 @@ const STAFF_RENDERERS = {
         </tr>`;
     }).join('');
     return `
-      ${pageHead(t('audit_log_title'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('audit_log_title'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(STAFF_ICONS.audit, t('audit_log_title'), list.length)}
       </div>
@@ -3683,11 +3683,11 @@ const STAFF_RENDERERS = {
     const overdueCount = all.filter(r=>r.slaStatus==='overdue').length;
     if(overdueOnly) all = all.filter(r=>r.slaStatus==='overdue');
     return `
-      ${pageHead(isDept ? t('nav_'+S.staff.dept) : t('staff_nav_requests'))}
+      ${pageHead(isDept ? escapeHtml(t('nav_'+S.staff.dept)) : t('staff_nav_requests'))}
       ${!isDept?`
         <div class="menu-cat-tabs">
           <button class="${filterDept==='all'?'active':''}" onclick="window.__staffDeptFilter='all'; staffRender();">${t('all_depts')}</button>
-          ${DEPTS_WITH_QUEUE.filter(d=>!S.staff.enabledDepartments || S.staff.enabledDepartments.includes(d)).map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${t('nav_'+d)}</button>`).join('')}
+          ${DEPTS_WITH_QUEUE.filter(d=>!S.staff.enabledDepartments || S.staff.enabledDepartments.includes(d)).map(d=>`<button class="${filterDept===d?'active':''}" onclick="window.__staffDeptFilter='${d}'; staffRender();">${escapeHtml(t('nav_'+d))}</button>`).join('')}
         </div>`:''}
       <div class="row" style="margin-bottom:12px;">
         <button class="btn sm ${overdueOnly?'':'secondary'}" onclick="window.__staffSlaFilter=!window.__staffSlaFilter; staffRender();">
@@ -3700,7 +3700,7 @@ const STAFF_RENDERERS = {
           <div class="list-item" style="align-items:flex-start;">
             <div>
               <div>${escapeHtml(opsTitle(r))}</div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?t('nav_'+r.dept)+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${!isDept?escapeHtml(t('nav_'+r.dept))+' · ':''}${escapeHtml(r.guestName)} · ${t('room_label')} ${escapeHtml(r.room)}${handlerName(r)?' · '+t('handled_by')+': '+escapeHtml(handlerName(r)):''}</div>
             </div>
             <div class="row" style="gap:6px;">
               ${slaPillLabel(r.slaStatus)?`<span class="pill ${slaPillClass(r.slaStatus)}">${slaPillLabel(r.slaStatus)}</span>`:''}
@@ -3721,7 +3721,7 @@ const STAFF_RENDERERS = {
           <div class="list-item" style="align-items:flex-start;">
             <div>
               <div><strong>${escapeHtml(p.name)}</strong> — ${t('room_label')} ${escapeHtml(p.room)}</div>
-              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${ICONS_SM.clock}${escapeHtml(p.arrivalTime)} ${p.flightNo?ICONS_SM.plane+escapeHtml(p.flightNo):''} · ${ICONS_SM.bed}${t(p.pillow)} · ${ICONS_SM.gift}${t(p.occasion)}</div>
+              <div style="color:var(--muted); font-size:12px; margin-top:2px;">${ICONS_SM.clock}${escapeHtml(p.arrivalTime)} ${p.flightNo?ICONS_SM.plane+escapeHtml(p.flightNo):''} · ${ICONS_SM.bed}${escapeHtml(t(p.pillow))} · ${ICONS_SM.gift}${escapeHtml(t(p.occasion))}</div>
             </div>
             ${p.earlyCheckin?`<span class="pill info">${t('early_checkin')}</span>`:''}
           </div>`).join('')}
@@ -3768,7 +3768,7 @@ const STAFF_RENDERERS = {
                 <td><strong>${escapeHtml(o.name)}</strong>${o.description?`<div style="color:var(--muted); font-size:11.5px;">${escapeHtml(o.description)}</div>`:''}</td>
                 <td>${Number(o.price)} ${escapeHtml(o.currency||'SAR')}</td>
                 <td>${o.min_stay_nights!=null ? o.min_stay_nights : t('offers_no_min_stay')}</td>
-                <td>${o.time_window ? t('window_'+o.time_window) : t('offers_no_window')}</td>
+                <td>${o.time_window ? escapeHtml(t('window_'+o.time_window)) : t('offers_no_window')}</td>
                 <td><span class="pill ${o.active?'':'danger'}">${o.active?t('status_active'):t('status_inactive')}</span></td>
                 <td class="actions"><button class="btn sm secondary" onclick="toggleOfferActive(${o.id}, ${!!o.active})">${o.active?t('deactivate'):t('activate')}</button></td>
               </tr>`).join('')}
@@ -3786,7 +3786,7 @@ const STAFF_RENDERERS = {
                 <td>${escapeHtml(r.room_number||'-')}</td>
                 <td>${escapeHtml(r.offer_name)}</td>
                 <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
-                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${escapeHtml(t('redemption_status_'+r.status))}</span></td>
                 <td class="actions">
                   ${r.status==='pending' ? `
                     <button class="btn sm" onclick="setRedemptionStatus(${r.id},'confirmed')">${t('confirm_action')}</button>
@@ -3821,8 +3821,8 @@ const STAFF_RENDERERS = {
       <h3 style="margin:0 0 10px;">${t('billing_section')}</h3>
       <div class="card" style="margin-bottom:22px;">
         <div class="grid grid-2">
-          <div class="field"><label>${t('setting_plan')}</label><div>${t('plan_'+(billing.plan||'essential'))}</div></div>
-          <div class="field"><label>${t('setting_billing_status')}</label><div><span class="pill ${billing.billing_status==='overdue'||billing.billing_status==='suspended'?'danger':billing.billing_status==='active'?'ok':'warn'}">${t('billing_'+(billing.billing_status||'active'))}</span></div></div>
+          <div class="field"><label>${t('setting_plan')}</label><div>${escapeHtml(t('plan_'+(billing.plan||'essential')))}</div></div>
+          <div class="field"><label>${t('setting_billing_status')}</label><div><span class="pill ${billing.billing_status==='overdue'||billing.billing_status==='suspended'?'danger':billing.billing_status==='active'?'ok':'warn'}">${escapeHtml(t('billing_'+(billing.billing_status||'active')))}</span></div></div>
           <div class="field"><label>${t('setting_billing_amount')}</label><div>${billing.billing_amount!=null?billing.billing_amount:'-'}</div></div>
           <div class="field"><label>${t('setting_billing_next_due')}</label><div>${billing.billing_next_due?String(billing.billing_next_due).slice(0,10):'-'}</div></div>
         </div>
@@ -3838,7 +3838,7 @@ const STAFF_RENDERERS = {
               <tr>
                 <td>${inv.amount} ${inv.currency||'SAR'}</td>
                 <td>${inv.due_date ? String(inv.due_date).slice(0,10) : '-'}</td>
-                <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${t('invoice_'+inv.status)}</span></td>
+                <td><span class="pill ${inv.status==='overdue'?'warn':inv.status==='paid'?'ok':''}">${escapeHtml(t('invoice_'+inv.status))}</span></td>
                 <td>${escapeHtml(inv.notes||'')}</td>
               </tr>`).join('')}
           </tbody>
@@ -3859,7 +3859,7 @@ const STAFF_RENDERERS = {
                 <td>${escapeHtml(r.room_number||'-')}</td>
                 <td>${escapeHtml(r.offer_name)}</td>
                 <td>${Number(r.price)} ${escapeHtml(r.currency||'SAR')}</td>
-                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${t('redemption_status_'+r.status)}</span></td>
+                <td><span class="pill ${r.status==='pending'?'warn':r.status==='cancelled'?'danger':''}">${escapeHtml(t('redemption_status_'+r.status))}</span></td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -3873,7 +3873,7 @@ const STAFF_RENDERERS = {
     list.forEach(a=>{ if(counts[a.severity]!==undefined) counts[a.severity]++; });
     const sevIcon = {danger: ICONS_ADMIN.bolt, warn: STAFF_ICONS.alerts, info: ICONS_ADMIN.clockKpi};
     return `
-      ${pageHead(t('staff_nav_alerts'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_alerts'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       <div class="grid grid-3" style="margin-bottom:20px;">
         ${kpiCard(ICONS_ADMIN.bolt, t('alerts_critical_kpi'), counts.danger)}
         ${kpiCard(STAFF_ICONS.alerts, t('alerts_warning_kpi'), counts.warn)}
@@ -3885,7 +3885,7 @@ const STAFF_RENDERERS = {
           <div class="kpi-ic" style="background:${a.severity==='danger'?'rgba(168,73,60,.14)':a.severity==='warn'?'rgba(179,130,44,.14)':'rgba(156,139,107,.14)'}; color:${a.severity==='danger'?'var(--danger)':a.severity==='warn'?'var(--warn)':'var(--accent2)'};">${sevIcon[a.severity]||''}</div>
           <div style="flex:1;">
             <div class="row between">
-              <strong>${t('alert_'+a.type)}</strong>
+              <strong>${escapeHtml(t('alert_'+a.type))}</strong>
               <span class="pill ${a.severity==='danger'?'danger':a.severity==='warn'?'warn':'info'}">${a.severity}</span>
             </div>
             <div style="color:var(--muted); font-size:13px; margin-top:4px;">
@@ -3901,7 +3901,7 @@ const STAFF_RENDERERS = {
   },
   search(){
     return `
-      ${pageHead(t('staff_nav_search'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_search'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       ${searchBar('admin-global-search-input', t('search_placeholder_global'), 'onAdminGlobalSearchInput(this.value)')}
       <div id="admin-search-results">${renderAdminSearchResults()}</div>
     `;
@@ -3912,7 +3912,7 @@ const STAFF_RENDERERS = {
     const isFull = S.staff.adminScope !== 'readonly';
     const depts = s ? (s.default_enabled_departments||[]) : ALL_DEPARTMENTS;
     return `
-      ${pageHead(t('staff_nav_settings'), `${escapeHtml(S.staff.name)} · ${t('role_'+S.staff.role)}`)}
+      ${pageHead(t('staff_nav_settings'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
       ${!isFull ? `<div class="card" style="margin-bottom:16px; border-color:var(--warn);"><span class="pill warn">${t('readonly_admin_notice')}</span></div>` : ''}
       ${!s ? `<div class="card"><p style="color:var(--muted)">${t('no_data')}</p></div>` : `
       <div class="card" style="margin-bottom:16px;">
@@ -3929,7 +3929,7 @@ const STAFF_RENDERERS = {
           ${ALL_DEPARTMENTS.map(d=>`
             <label class="dept-check">
               <input type="checkbox" id="ps-dept-${d}" ${depts.includes(d)?'checked':''} ${isFull?'':'disabled'}>
-              <span>${t('nav_'+d)}</span>
+              <span>${escapeHtml(t('nav_'+d))}</span>
             </label>
           `).join('')}
         </div>
@@ -3967,7 +3967,7 @@ const STAFF_RENDERERS = {
               admins.map(a=>`
                 <tr>
                   <td><strong>${escapeHtml(a.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(a.email)}</div></td>
-                  <td>${t('admin_scope_'+(a.admin_scope||'full'))}</td>
+                  <td>${escapeHtml(t('admin_scope_'+(a.admin_scope||'full')))}</td>
                   <td><span class="pill ${a.active?'':'danger'}">${a.active?t('status_active'):t('status_inactive')}</span></td>
                   <td class="actions">${isFull ? `<button class="btn sm secondary" onclick="toggleAdminPlatformAdminActive(${a.id}, ${!!a.active})">${a.active?t('deactivate'):t('activate')}</button> <button class="btn sm ghost" style="color:#ff6b6b;border-color:#ff6b6b;" onclick="deleteAdminPlatformAdmin(${a.id}, '${escapeHtml(a.email)}')">${t('delete_permanently')}</button>` : ''}</td>
                 </tr>`).join('')}
