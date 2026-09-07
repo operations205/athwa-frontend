@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0B1220">
+<meta name="theme-color" content="#010817">
 <title>ATHWA</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
 :root{
-  --bg:#F7F2EA; --panel:#FFFDFC; --panel2:#F1EAD9; --border:#E6DFCC;
-  --text:#171B23; --muted:#6B6459; --accent:#C9A064; --accent2:#0B1220;
+  --bg:#F6F2EE; --panel:#FFFDFC; --panel2:#F1EAD9; --border:#E6DFCC;
+  --text:#171B23; --muted:#6B6459; --accent:#C6A174; --accent2:#010817;
   --good:#3F7D5B; --warn:#C97A2B; --danger:#9E3B3B;
   --radius:16px;
 }
@@ -36,7 +36,7 @@ button{font-family:inherit;}
 .topbar{
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 20px; background:var(--panel); border-bottom:1px solid var(--border);
-  position:sticky; top:0; z-index:20; box-shadow:0 2px 10px rgba(11,18,32,.04);
+  position:sticky; top:0; z-index:20; box-shadow:0 2px 10px rgba(1,8,23,.04);
 }
 .brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:19px; font-family:Georgia,'Times New Roman',serif; letter-spacing:.5px;}
 .brand .logo{
@@ -70,14 +70,14 @@ button{font-family:inherit;}
 }
 .nav-item svg{width:19px; height:19px; flex-shrink:0;}
 .nav-item:hover{background:var(--panel2); color:var(--text);}
-.nav-item.active{background:rgba(201,160,100,.14); color:var(--accent2); border:1px solid rgba(201,160,100,.4);}
+.nav-item.active{background:rgba(198,161,116,.14); color:var(--accent2); border:1px solid rgba(198,161,116,.4);}
 
 main{flex:1; overflow-y:auto; padding:22px; min-width:0;}
 
 .bottomnav{display:none;}
 
 /* ---------- Cards / commons ---------- */
-.card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:0 1px 2px rgba(11,18,32,.04), 0 6px 16px rgba(11,18,32,.05);}
+.card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:0 1px 2px rgba(1,8,23,.04), 0 6px 16px rgba(1,8,23,.05);}
 .ic-sm{display:inline-flex; vertical-align:-4px; margin-inline-end:6px; color:var(--accent2); opacity:.75;}
 .ic-sm svg{width:16px; height:16px; display:block;}
 .grid{display:grid; gap:14px;}
@@ -96,12 +96,12 @@ p.page-sub{color:var(--muted); margin:0 0 20px; font-size:14px;}
 .tile{
   background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
   padding:18px 14px; text-align:center; cursor:pointer; transition:.15s;
-  box-shadow:0 1px 2px rgba(11,18,32,.04), 0 4px 10px rgba(11,18,32,.04);
+  box-shadow:0 1px 2px rgba(1,8,23,.04), 0 4px 10px rgba(1,8,23,.04);
 }
-.tile:hover{transform:translateY(-3px); border-color:var(--accent); box-shadow:0 10px 22px rgba(11,18,32,.09);}
+.tile:hover{transform:translateY(-3px); border-color:var(--accent); box-shadow:0 10px 22px rgba(1,8,23,.09);}
 .tile .ic{
   width:46px; height:46px; margin:0 auto 10px; border-radius:12px;
-  background:rgba(201,160,100,.14); display:flex; align-items:center; justify-content:center; color:var(--accent2);
+  background:rgba(198,161,116,.14); display:flex; align-items:center; justify-content:center; color:var(--accent2);
 }
 .tile .ic svg{width:22px; height:22px;}
 .tile-label{font-size:13px; font-weight:600;}
@@ -121,7 +121,7 @@ input,select,textarea{
   width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text);
   border-radius:10px; padding:11px 12px; font-size:14px; outline:none;
 }
-input:focus,select:focus,textarea:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(201,160,100,.22);}
+input:focus,select:focus,textarea:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(198,161,116,.22);}
 label{font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:6px; display:block;}
 .field{margin-bottom:14px;}
 
@@ -135,7 +135,7 @@ label{font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:6px; 
 }
 .pill.warn{background:rgba(201,122,43,.14); color:var(--warn);}
 .pill.danger{background:rgba(158,59,59,.14); color:var(--danger);}
-.pill.info{background:rgba(201,160,100,.16); color:var(--accent2);}
+.pill.info{background:rgba(198,161,116,.16); color:var(--accent2);}
 
 .list-item{
   display:flex; align-items:center; justify-content:space-between; padding:13px 4px;
@@ -147,11 +147,11 @@ label{font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:6px; 
 .kpi-card{
   background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
   padding:16px; display:flex; align-items:flex-start; gap:12px;
-  box-shadow:0 1px 2px rgba(11,18,32,.04), 0 6px 16px rgba(11,18,32,.05);
+  box-shadow:0 1px 2px rgba(1,8,23,.04), 0 6px 16px rgba(1,8,23,.05);
 }
 .kpi-card .kpi-ic{
   width:38px; height:38px; min-width:38px; border-radius:10px;
-  background:rgba(201,160,100,.14); display:flex; align-items:center; justify-content:center; color:var(--accent2);
+  background:rgba(198,161,116,.14); display:flex; align-items:center; justify-content:center; color:var(--accent2);
 }
 .kpi-card .kpi-ic svg{width:19px; height:19px;}
 .kpi-card .kpi-label{color:var(--muted); font-size:12px; margin-bottom:4px;}
@@ -191,7 +191,7 @@ table.dtable td.actions{white-space:nowrap;}
 .toast-wrap{position:fixed; bottom:20px; inset-inline-end:20px; z-index:999; display:flex; flex-direction:column; gap:10px;}
 .toast{
   background:var(--panel); border:1px solid var(--accent); color:var(--text); padding:12px 16px;
-  border-radius:12px; box-shadow:0 10px 26px rgba(11,18,32,.14); font-size:13.5px; min-width:220px;
+  border-radius:12px; box-shadow:0 10px 26px rgba(1,8,23,.14); font-size:13.5px; min-width:220px;
   animation:slidein .25s ease;
 }
 @keyframes slidein{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
@@ -203,15 +203,15 @@ table.dtable td.actions{white-space:nowrap;}
 /* ---------- Login screen ---------- */
 #login-screen{
   height:100%; display:flex; align-items:center; justify-content:center; padding:20px; position:relative;
-  background:radial-gradient(900px 500px at 25% 0%, rgba(201,160,100,.16), transparent 60%), var(--accent2);
+  background:radial-gradient(900px 500px at 25% 0%, rgba(198,161,116,.16), transparent 60%), var(--accent2);
 }
-.login-card{width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:20px; padding:36px 30px; text-align:center; transition:max-width .15s; box-shadow:0 2px 4px rgba(11,18,32,.05), 0 20px 44px rgba(11,18,32,.10);}
+.login-card{width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:20px; padding:36px 30px; text-align:center; transition:max-width .15s; box-shadow:0 2px 4px rgba(1,8,23,.05), 0 20px 44px rgba(1,8,23,.10);}
 .portal-tile{
   background:var(--panel2); border:1px solid var(--border); border-radius:14px; padding:18px 12px;
   text-align:center; cursor:pointer; transition:.15s;
 }
 .portal-tile:hover{border-color:var(--accent); transform:translateY(-2px);}
-.portal-tile .ic{width:44px; height:44px; margin:0 auto 8px; border-radius:12px; background:rgba(201,160,100,.14); display:flex; align-items:center; justify-content:center; color:var(--accent2);}
+.portal-tile .ic{width:44px; height:44px; margin:0 auto 8px; border-radius:12px; background:rgba(198,161,116,.14); display:flex; align-items:center; justify-content:center; color:var(--accent2);}
 .portal-tile .ic svg{width:22px; height:22px;}
 .login-logo{height:96px; width:auto; display:flex; align-items:center; justify-content:center; margin:0 auto 14px;}
 .login-logo img{height:100%; width:auto; object-fit:contain; display:block;}
@@ -223,7 +223,7 @@ table.dtable td.actions{white-space:nowrap;}
   background:var(--panel2); color:var(--muted); cursor:pointer; font-weight:600; font-size:13px;
 }
 .menu-cat-tabs button.active{background:var(--accent2); color:#fff; border-color:var(--accent2);}
-.menu-item{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:8px; box-shadow:0 1px 2px rgba(11,18,32,.04), 0 4px 10px rgba(11,18,32,.04);}
+.menu-item{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:8px; box-shadow:0 1px 2px rgba(1,8,23,.04), 0 4px 10px rgba(1,8,23,.04);}
 .menu-item .name{font-weight:700; font-size:14.5px;}
 .menu-item .desc{font-size:12px; color:var(--muted); min-height:30px;}
 .menu-item .price{color:var(--accent2); font-weight:800;}
@@ -231,7 +231,7 @@ table.dtable td.actions{white-space:nowrap;}
 .cart-fab{
   position:fixed; bottom:24px; inset-inline-start:50%; transform:translateX(-50%);
   background:var(--accent2); color:#fff; padding:13px 26px; border-radius:30px; font-weight:700;
-  box-shadow:0 10px 26px rgba(11,18,32,.35); cursor:pointer; display:none; align-items:center; gap:8px;
+  box-shadow:0 10px 26px rgba(1,8,23,.35); cursor:pointer; display:none; align-items:center; gap:8px;
   z-index:30;
 }
 html[dir=rtl] .cart-fab{transform:translateX(50%);}
@@ -260,8 +260,8 @@ html[dir=rtl] .msg.staff{align-self:flex-end; border-bottom-left-radius:14px; bo
 
 .banner{
   display:flex; align-items:center; justify-content:space-between; gap:14px;
-  background:linear-gradient(90deg, rgba(201,160,100,.14), rgba(201,160,100,.04));
-  border:1px solid rgba(201,160,100,.35); border-radius:var(--radius); padding:16px 18px; margin-bottom:20px;
+  background:linear-gradient(90deg, rgba(198,161,116,.14), rgba(198,161,116,.04));
+  border:1px solid rgba(198,161,116,.35); border-radius:var(--radius); padding:16px 18px; margin-bottom:20px;
 }
 
 footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16px 0 4px;}
@@ -279,9 +279,8 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 }
 
 /* ---------- Brand refresh: logo mark, accessibility, motion ---------- */
-.logo-mark{width:36px; height:36px; border-radius:10px; background:var(--accent2); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:17px; line-height:1; flex-shrink:0;}
-.login-logo-mark{width:84px; height:84px; border-radius:22px; background:var(--accent2); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:34px; line-height:1; margin:0 auto;}
-.login-wordmark{font-family:Georgia,'Times New Roman',serif; font-weight:700; font-size:22px; letter-spacing:2px; color:var(--text); margin:14px 0 2px;}
+.brand-lockup{height:34px; width:auto; display:block;}
+.login-lockup{height:78px; width:auto; display:block; margin:0 auto 14px;}
 .brand-tagline{font-size:12px; color:var(--muted); letter-spacing:.3px; margin:0 0 18px;}
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px;}
 @media(max-width:860px){
@@ -303,7 +302,7 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 <!-- ================= GUEST APP ================= -->
 <div id="app">
   <div class="topbar">
-    <div class="brand"><div class="logo logo-mark" aria-hidden="true">✦</div> ATHWA</div>
+    <div class="brand"><img src="assets/athwa-lockup-light-bg.svg" alt="ATHWA" class="brand-lockup"></div>
     <div class="topbar-right">
       <button class="lang-toggle" onclick="toggleLang()"><span id="lang-label">English</span></button>
       <button class="icon-btn" onclick="nav('messages')" title="Messages">
@@ -329,7 +328,7 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
 <!-- ================= STAFF APP ================= -->
 <div id="staff-app">
   <div class="topbar">
-    <div class="brand"><div class="logo logo-mark" aria-hidden="true">✦</div> <span>ATHWA <span style="font-size:12px; color:var(--muted); font-family:inherit;" id="staff-role-label"></span></span></div>
+    <div class="brand"><img src="assets/athwa-lockup-light-bg.svg" alt="ATHWA" class="brand-lockup"> <span style="font-size:12px; color:var(--muted); font-family:inherit;" id="staff-role-label"></span></div>
     <div class="topbar-right">
       <button class="lang-toggle" onclick="toggleLang()"><span id="lang-label-staff">English</span></button>
       <button class="icon-btn" onclick="staffLogout()" title="Logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
@@ -2184,7 +2183,7 @@ function addToCart(id, cat){
 }
 function openCart(){
   const html = `
-    <div style="position:fixed; inset:0; background:rgba(11,18,32,.45); z-index:60; display:flex; align-items:flex-end; justify-content:center;" onclick="if(event.target===this) this.remove();">
+    <div style="position:fixed; inset:0; background:rgba(1,8,23,.45); z-index:60; display:flex; align-items:flex-end; justify-content:center;" onclick="if(event.target===this) this.remove();">
       <div class="card" style="width:100%; max-width:480px; border-radius:20px 20px 0 0; max-height:70vh; overflow-y:auto;">
         <h3 style="margin-top:0;">${t('cart')}</h3>
         ${S.cart.length===0? `<p style="color:var(--muted)">${t('empty_cart')}</p>` :
@@ -2293,8 +2292,7 @@ function renderLogin(){
   if(!card) return;
   card.style.maxWidth = '380px';
   card.innerHTML = `
-    <div class="login-logo login-logo-mark" aria-hidden="true">✦</div>
-    <p class="login-wordmark">ATHWA</p>
+    <div class="login-logo"><img src="assets/athwa-lockup-dark-bg.svg" alt="ATHWA" class="login-lockup"></div>
     <p class="brand-tagline">${LANG==='ar' ? 'ATHWA — نظام تجربة الضيف' : 'ATHWA — Guest Experience OS'}</p>
     <p style="color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.5px; margin:0 0 6px;">${t('hotel_name')}</p>
     <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('login_title')}</h2>
@@ -2317,8 +2315,7 @@ function renderAdminLogin(){
   if(!card) return;
   card.style.maxWidth = '380px';
   card.innerHTML = `
-    <div class="login-logo login-logo-mark" aria-hidden="true">✦</div>
-      <p class="login-wordmark">ATHWA</p>
+    <div class="login-logo"><img src="assets/athwa-lockup-dark-bg.svg" alt="ATHWA" class="login-lockup"></div>
     <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('platform_admin_login')}</h2>
     <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">ATHWA</p>
     <div class="field" style="text-align:start;">
@@ -2367,8 +2364,7 @@ function renderForgotPassword(isAdmin){
   if(!card) return;
   card.style.maxWidth = '380px';
   card.innerHTML = `
-    <div class="login-logo login-logo-mark" aria-hidden="true">✦</div>
-      <p class="login-wordmark">ATHWA</p>
+    <div class="login-logo"><img src="assets/athwa-lockup-dark-bg.svg" alt="ATHWA" class="login-lockup"></div>
     <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('forgot_password_title')}</h2>
     <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">${t('forgot_password_sub')}</p>
     <div class="field" style="text-align:start;">
@@ -2395,8 +2391,7 @@ async function submitForgotPassword(isAdmin, btn){
   const card = document.getElementById('login-card');
   if(card){
     card.innerHTML = `
-      <div class="login-logo login-logo-mark" aria-hidden="true">✦</div>
-      <p class="login-wordmark">ATHWA</p>
+      <div class="login-logo"><img src="assets/athwa-lockup-dark-bg.svg" alt="ATHWA" class="login-lockup"></div>
       <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('forgot_password_title')}</h2>
       <p style="color:var(--muted); font-size:13.5px; margin:0 0 22px;">${t('reset_link_sent_msg')}</p>
       <button class="btn ghost full" onclick="${isAdmin?'renderAdminLogin()':'renderLogin()'}">${t('back_to_login')}</button>
@@ -2411,8 +2406,7 @@ function renderResetPassword(token){
   if(!card) return;
   card.style.maxWidth = '380px';
   card.innerHTML = `
-    <div class="login-logo login-logo-mark" aria-hidden="true">✦</div>
-      <p class="login-wordmark">ATHWA</p>
+    <div class="login-logo"><img src="assets/athwa-lockup-dark-bg.svg" alt="ATHWA" class="login-lockup"></div>
     <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('reset_password_title')}</h2>
     <div class="field" style="text-align:start;">
       <label>${t('new_password_label')}</label>
@@ -3901,7 +3895,7 @@ const STAFF_RENDERERS = {
       ${list.length===0?`<div class="card"><p style="color:var(--muted)">${t('no_alerts')}</p></div>`:
       list.map(a=>`
         <div class="card" style="margin-bottom:10px; display:flex; align-items:flex-start; gap:12px;">
-          <div class="kpi-ic" style="background:${a.severity==='danger'?'rgba(158,59,59,.14)':a.severity==='warn'?'rgba(201,122,43,.14)':'rgba(201,160,100,.14)'}; color:${a.severity==='danger'?'var(--danger)':a.severity==='warn'?'var(--warn)':'var(--accent2)'};">${sevIcon[a.severity]||''}</div>
+          <div class="kpi-ic" style="background:${a.severity==='danger'?'rgba(158,59,59,.14)':a.severity==='warn'?'rgba(201,122,43,.14)':'rgba(198,161,116,.14)'}; color:${a.severity==='danger'?'var(--danger)':a.severity==='warn'?'var(--warn)':'var(--accent2)'};">${sevIcon[a.severity]||''}</div>
           <div style="flex:1;">
             <div class="row between">
               <strong>${escapeHtml(t('alert_'+a.type))}</strong>
