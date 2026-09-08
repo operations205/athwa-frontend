@@ -1062,7 +1062,7 @@ const DICT = {
     portal_owner:"مالك الفندق", portal_owner_desc:"نظرة عامة على الأداء",
     portal_manager:"مدير الفندق", portal_manager_desc:"إدارة العمليات اليومية",
     portal_dept:"مدير قسم", portal_dept_desc:"متابعة طلبات قسمك",
-    role_owner:"مالك الفندق", role_manager:"مدير الفندق", role_dept:"مدير قسم", role_platform_admin:"مسؤول المنصة",
+    role_owner:"مالك الفندق", role_manager:"مدير الفندق", role_dept:"مدير قسم", role_dept_manager:"مدير قسم", role_staff:"موظف", role_platform_admin:"مسؤول المنصة",
     staff_nav_hotels:"إدارة الفنادق",
     platform_admin_login:"دخول كمسؤول المنصة", admin_email:"البريد الإلكتروني", back_to_login:"رجوع لتسجيل الدخول العادي",
     forgot_password_link:"نسيت كلمة المرور؟",
@@ -1252,7 +1252,7 @@ const DICT = {
     portal_owner:"Hotel Owner", portal_owner_desc:"Performance overview",
     portal_manager:"Hotel Manager", portal_manager_desc:"Manage daily operations",
     portal_dept:"Department Manager", portal_dept_desc:"Track your department's requests",
-    role_owner:"Hotel Owner", role_manager:"Hotel Manager", role_dept:"Department Manager", role_platform_admin:"Platform Admin",
+    role_owner:"Hotel Owner", role_manager:"Hotel Manager", role_dept:"Department Manager", role_dept_manager:"Department Manager", role_staff:"Staff", role_platform_admin:"Platform Admin",
     staff_nav_hotels:"Manage Hotels",
     platform_admin_login:"Platform Admin Login", admin_email:"Email", back_to_login:"Back to regular login",
     forgot_password_link:"Forgot password?",
@@ -2451,7 +2451,7 @@ function staffLogout(){
 }
 function updateStaffRoleLabel(){
   const el = document.getElementById('staff-role-label');
-  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? t('nav_'+S.staff.dept) : t('role_'+S.staff.role));
+  if(el) el.textContent = '· ' + ((S.staff.role==='dept_manager'||S.staff.role==='staff') ? t('nav_'+S.staff.dept) : t('role_'+S.staff.role));
 }
 
 /* ---------------- Staff nav ---------------- */
@@ -2474,7 +2474,8 @@ const STAFF_ICONS = {
 const STAFF_NAV_BY_ROLE = {
   owner:['overview','requests','prearrivals','feedback','offers','performance'],
   manager:['overview','requests','prearrivals','feedback','offers','performance'],
-  dept:['requests'],
+  dept_manager:['requests'],
+  staff:['requests'],
   platform_admin:['dashboard','hotels','analytics','users','audit','alerts','search','settings'],
 };
 // The fixed set of guest/staff department modules the app ships with - kept
@@ -2617,7 +2618,7 @@ function buildStaffNav(){
   if(!sidenav || !bottomnav) return;
   sidenav.innerHTML=''; bottomnav.innerHTML='';
   items.forEach(key=>{
-    const label = key==='requests' && S.staff.role==='dept' ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('staff_nav_'+key));
+    const label = key==='requests' && (S.staff.role==='dept_manager'||S.staff.role==='staff') ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('staff_nav_'+key));
     const html = `<div class="nav-item ${STAFF_CURRENT===key?'active':''}" onclick="staffNav('${key}')">${STAFF_ICONS[key]}<span>${label}</span></div>`;
     sidenav.insertAdjacentHTML('beforeend', html);
     bottomnav.insertAdjacentHTML('beforeend', html);
@@ -3689,7 +3690,7 @@ const STAFF_RENDERERS = {
     `;
   },
   requests(){
-    const isDept = S.staff.role==='dept';
+    const isDept = (S.staff.role==='dept_manager'||S.staff.role==='staff');
     let all = getAllOpsRequests();
     if(isDept) all = all.filter(r=>r.dept===S.staff.dept);
     const filterDept = window.__staffDeptFilter || 'all';
