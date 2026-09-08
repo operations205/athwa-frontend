@@ -2467,7 +2467,7 @@ const STAFF_ICONS = {
   audit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>',
   alerts:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
-  offers: ICONS.gift,
+  offers: ICONS.offers,
   performance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
   settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
@@ -3399,12 +3399,12 @@ const STAFF_RENDERERS = {
     const fb = getAllFeedback();
     const avgRating = fb.length ? (fb.reduce((a,b)=>a+b.rating,0)/fb.length).toFixed(1) : '-';
     const kpis = [
-      {label:t('kpi_occupied'), value:'42/60'},
+      {label:t('kpi_occupied'), value:'—'},
       {label:t('kpi_pending'), value:pending},
       {label:t('kpi_progress'), value:progress},
       {label:t('kpi_done_today'), value:done},
       {label:t('kpi_avg_rating'), value:avgRating+' ★'},
-      {label:t('kpi_revenue'), value:'18,420 SAR'},
+      {label:t('kpi_revenue'), value:'—'},
     ];
     return `
       ${pageHead(t('staff_nav_overview'), `${escapeHtml(S.staff.name)} · ${escapeHtml(t('role_'+S.staff.role))}`)}
