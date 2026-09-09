@@ -979,7 +979,7 @@ async function refreshOpsData(){
       const [reqs, fb, pre] = await Promise.all([
         apiCall('/api/requests', {token}),
         (S.staff.role!=='dept') ? apiCall('/api/feedback', {token}) : Promise.resolve([]),
-        (S.staff.role!=='dept') ? apiCall('/api/prearrival', {token}) : Promise.resolve([]),
+        (S.staff.role!=='dept' || S.staff.dept==='reception') ? apiCall('/api/prearrival', {token}) : Promise.resolve([]),
       ]);
       CACHE.requests = reqs.map(mapBackendRequest);
       CACHE.feedback = fb.map(mapBackendFeedback);
