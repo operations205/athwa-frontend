@@ -1,0 +1,72 @@
+name: Frontend checks
+
+# This repository has no build step and no package.json - the app ships as six
+# static HTML files with their JavaScript inline. The regression suites next to
+# them are therefore the only thing standing between a bad edit and production,
+# and until now they only ran when somebody remembered to run them by hand.
+#
+# Suites are DISCOVERED rather than listed, so this workflow needs no
+# maintenance when one is added, and so it works unchanged on branches that
+# carry a different set of them (release-integrity-regression.test.js exists on
+# main but not on staging).
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # A syntax error inside an inline <script> is invisible to a diff review
+      # and breaks the entire page at runtime, so check it first and cheaply.
+      - name: Inline script syntax
+        run: |
+          status=0
+          for f in *.html; do
+            if node -e "
+              const fs = require('fs');
+              const src = fs.readFileSync('$f', 'utf8');
+              const m = src.match(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/);
+              if (!m) { console.error('no inline script found'); process.exit(1); }
+              new Function(m[1]);
+            "; then
+              echo "ok   $f"
+            else
+              echo "FAIL $f"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Regression suites
+        run: |
+          status=0
+          shopt -s nullglob
+          suites=(*.test.js contrast-check.js)
+          if [ ${#suites[@]} -eq 0 ]; then
+            echo "No suites found - refusing to report success."
+            exit 1
+          fi
+          for t in "${suites[@]}"; do
+            echo "── $t"
+            if node "$t"; then
+              echo ""
+            else
+              echo "FAILED: $t"
+              echo ""
+              status=1
+            fi
+          done
+          exit $status

@@ -1,5 +1,27 @@
+# Security headers for the Render static site.
+#
+# connect-src lists BOTH backends deliberately, rather than one per branch.
+#
+# This file previously named only the staging backend, on every branch. Staging
+# served exactly that; production served the production backend. So production's
+# real policy lived solely in the Render dashboard and the file committed here
+# was wrong for it. Anyone recreating the production static site from this
+# repository would have shipped a CSP pointing at staging, which blocks every
+# API call the app makes - a total outage with no server-side error to diagnose.
+#
+# Naming both origins keeps one correct file for both environments, so a
+# staging -> main merge can never carry the wrong value across. It is not the
+# access-control boundary and does not need to be: which backend a page talks
+# to is decided by the API_BASE hostname map in the app itself, and each backend
+# independently rejects foreign origins through its own CORS_ORIGINS allowlist.
+# CSP here is a backstop against exfiltration to an unrelated host, and both of
+# these hosts are ours.
+#
+# When a custom domain is added, add its backend origin here in the same commit
+# that configures it.
+
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://athwa-backend-staging.onrender.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://athwa-backend-943m.onrender.com https://athwa-backend-staging.onrender.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
