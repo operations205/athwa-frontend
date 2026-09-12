@@ -998,10 +998,34 @@ async function refreshOpsData(){
     }
   }catch(e){ /* silent: keep last known cache on transient network errors */ }
 }
+/* Live polling cadence.
+
+   Two changes from the original fixed 6-second interval:
+
+   (1) 20s instead of 6s. Hotel operations do not change meaningfully inside
+       six seconds, and at that cadence a single staff dashboard issued about
+       450 API requests per 15 minutes (3 calls x 10 cycles/min x 15). Because
+       every device in a hotel shares one outbound NAT address, roughly three
+       colleagues were enough to exhaust the whole property's request budget
+       and start 429-ing each other.
+
+   (2) The timer no longer fires while the tab is hidden, and refreshes once
+       immediately when it becomes visible again. A dashboard left open on a
+       back-office screen now costs nothing until somebody actually looks at
+       it, and comes back up to date the moment they do. */
+const LIVE_POLL_MS = 20000;
 function startLivePolling(){
   if(REFRESH_TIMER) clearInterval(REFRESH_TIMER);
   refreshOpsData();
-  REFRESH_TIMER = setInterval(refreshOpsData, 6000);
+  REFRESH_TIMER = setInterval(function(){
+    if(!document.hidden) refreshOpsData();
+  }, LIVE_POLL_MS);
+  if(!window.__athwaVisibilityHooked){
+    window.__athwaVisibilityHooked = true;
+    document.addEventListener('visibilitychange', function(){
+      if(!document.hidden && REFRESH_TIMER) refreshOpsData();
+    });
+  }
 }
 /* ============================================================
    ATHWA Hotel Guest App — front-end demo (no backend required)
