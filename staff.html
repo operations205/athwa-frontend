@@ -1022,7 +1022,7 @@ const DICT = {
     nav_entertainment:"الترفيه", nav_billing:"الفاتورة", nav_messages:"رسائل الفندق",
     nav_offers:"عروض وولاء", nav_events:"الفعاليات", nav_feedback:"التقييم", nav_checkout:"تسجيل المغادرة",
     hotel_name:"ATHWA", room_type:"جناح تنفيذي", handled_by:"المسؤول عن الطلب",
-    restaurant_name:"مطعم الكرم", spa_name:"نخيل سبا وعافية",
+    restaurant_name:"مطعم الياسمين", spa_name:"نخيل سبا وعافية",
     greeting:"أهلاً", room_label:"غرفة", quick_actions:"إجراءات سريعة",
     notifications:"الإشعارات", view_all:"عرض الكل",
     add:"إضافة", cart:"السلة", total:"الإجمالي", place_order:"إرسال الطلب",
@@ -1212,7 +1212,7 @@ const DICT = {
     nav_entertainment:"Entertainment", nav_billing:"Billing", nav_messages:"Hotel Messages",
     nav_offers:"Offers & Loyalty", nav_events:"Events", nav_feedback:"Feedback", nav_checkout:"Check-out",
     hotel_name:"ATHWA", room_type:"Executive Suite", handled_by:"Handled by",
-    restaurant_name:"Al Karam Restaurant", spa_name:"Nakheel Spa & Wellness",
+    restaurant_name:"Al Yasmin Restaurant", spa_name:"Nakheel Spa & Wellness",
     greeting:"Welcome", room_label:"Room", quick_actions:"Quick Actions",
     notifications:"Notifications", view_all:"View all",
     add:"Add", cart:"Cart", total:"Total", place_order:"Place Order",
@@ -1391,7 +1391,7 @@ const DICT = {
     no_data:"No data yet",
   }
 };
-let LANG = localStorage.getItem('karam_lang') || 'ar';
+let LANG = localStorage.getItem('athwa_lang') || 'ar';
 function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
 // Maps a raw DB role ('owner'|'manager'|'dept_manager'|'staff'|'platform_admin')
 // to its display label. dept_manager/staff share the 'role_dept' label since
@@ -1419,7 +1419,7 @@ function applyLang(){
 }
 function toggleLang(){
   LANG = LANG === 'ar' ? 'en' : 'ar';
-  localStorage.setItem('karam_lang', LANG);
+  localStorage.setItem('athwa_lang', LANG);
   applyLang();
 }
 
