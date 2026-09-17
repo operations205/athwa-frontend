@@ -3498,11 +3498,11 @@ const STAFF_RENDERERS = {
       </div>
       <div id="create-hotel-panel" class="card" style="display:${ADMIN_CREATE_HOTEL_OPEN?'block':'none'}; margin-bottom:16px;">
         <div class="grid grid-2">
-          <div class="field"><label>${t('hotel_display_name')}</label><input id="nh-name" placeholder="Zahret Al-Sharq Hotel"></div>
-          <div class="field"><label>${t('hotel_slug')}</label><input id="nh-slug" placeholder="zahret-alsharq"></div>
-          <div class="field"><label>${t('owner_name')}</label><input id="nh-owner-name"></div>
-          <div class="field"><label>${t('owner_email')}</label><input id="nh-owner-email" type="email"></div>
-          <div class="field"><label>${t('owner_password')}</label><input id="nh-owner-pass" type="password"></div>
+          <div class="field"><label>${t('hotel_display_name')}</label><input id="nh-name" placeholder="Zahret Al-Sharq Hotel" autocomplete="off"></div>
+          <div class="field"><label>${t('hotel_slug')}</label><input id="nh-slug" placeholder="zahret-alsharq" autocomplete="off"></div>
+          <div class="field"><label>${t('owner_name')}</label><input id="nh-owner-name" autocomplete="off"></div>
+          <div class="field"><label>${t('owner_email')}</label><input id="nh-owner-email" type="email" autocomplete="off"></div>
+          <div class="field"><label>${t('owner_password')}</label><input id="nh-owner-pass" type="password" autocomplete="new-password"></div>
         </div>
         <div class="row" style="gap:8px; margin-top:6px;">
           <button class="btn" onclick="submitCreateHotel(this)">${t('create_hotel_btn')}</button>
