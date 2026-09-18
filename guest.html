@@ -322,9 +322,12 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
       <button class="icon-btn" onclick="nav('messages')" title="Messages">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="badge" id="msg-badge">1</span>
       </button>
-      <button class="icon-btn" onclick="nav('dashboard')" title="Notifications">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg><span class="badge" id="notif-badge">2</span>
+      <div class="notif-wrap" style="position:relative;">
+      <button class="icon-btn" onclick="toggleGuestNotifPanel(event)" title="Notifications" id="guest-notif-bell-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg><span class="badge" id="guest-notif-badge" style="display:none;">0</span>
       </button>
+      <div class="notif-panel" id="guest-notif-panel" style="display:none;"></div>
+      </div>
       <button class="icon-btn" onclick="doLogout()" title="Logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
     </div>
   </div>
@@ -550,6 +553,155 @@ function resetNotifState(){
   const badge = document.getElementById('notif-badge');
   if(badge) badge.style.display = 'none';
   const panel = document.getElementById('notif-panel');
+  if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+
+/* ---------------- Guest-side notifications (bell/badge/panel) ----------------
+ * Mirrors the staff notification block above, but scoped to the guest's own
+ * session/token (getGuestToken()/S.loggedIn), never the staff token. Only
+ * the notification types the backend actually emits to guests are handled:
+ * staff_reply (a staff reply to this guest's message) and
+ * request_status_changed (this guest's own request changed status). A
+ * request_status_changed notification deep-links to the specific request by
+ * navigating to its department page and highlighting that exact request in
+ * the list (see requestsList()/highlightGuestRequest()). staff_reply has no
+ * dedicated conversation screen anywhere in this app yet (there is no
+ * frontend UI at all for the /api/messages guest<->reception thread - the
+ * existing "Messages" nav item is the separate AI concierge feature) so it
+ * cannot be given a real deep link without building that screen; clicking it
+ * only marks it read rather than pretending to navigate somewhere specific.
+ */
+const GUEST_NOTIF_TYPE_LABELS = {
+  staff_reply: 'notif_type_staff_reply',
+  request_status_changed: 'notif_type_request_status_changed',
+};
+let GUEST_NOTIF_UNREAD_COUNT = 0;
+let GUEST_NOTIF_LIST = [];
+let GUEST_NOTIF_PANEL_OPEN = false;
+let GUEST_NOTIF_LAST_ERROR = false;
+
+function guestNotifTitle(n){
+  const key = GUEST_NOTIF_TYPE_LABELS[n.type];
+  return key ? t(key) : (n.title || n.type);
+}
+async function refreshGuestNotificationCount(){
+  if(!(S.loggedIn && getGuestToken())) return;
+  try{
+    const data = await apiCall('/api/notifications/unread-count', {token: getGuestToken()});
+    GUEST_NOTIF_UNREAD_COUNT = data.count||0;
+    GUEST_NOTIF_LAST_ERROR = false;
+  }catch(e){
+    GUEST_NOTIF_LAST_ERROR = true;
+  }
+  renderGuestNotifBadge();
+  if(GUEST_NOTIF_PANEL_OPEN) refreshGuestNotifList();
+}
+function renderGuestNotifBadge(){
+  const badge = document.getElementById('guest-notif-badge');
+  if(!badge) return;
+  if(GUEST_NOTIF_UNREAD_COUNT > 0){
+    badge.style.display = 'inline-block';
+    badge.textContent = GUEST_NOTIF_UNREAD_COUNT > 99 ? '99+' : String(GUEST_NOTIF_UNREAD_COUNT);
+  } else {
+    badge.style.display = 'none';
+  }
+}
+async function refreshGuestNotifList(){
+  if(!(S.loggedIn && getGuestToken())) return;
+  try{
+    GUEST_NOTIF_LIST = await apiCall('/api/notifications', {token: getGuestToken()});
+    GUEST_NOTIF_LAST_ERROR = false;
+  }catch(e){
+    GUEST_NOTIF_LAST_ERROR = true;
+  }
+  renderGuestNotifPanel();
+}
+function renderGuestNotifPanel(){
+  const panel = document.getElementById('guest-notif-panel');
+  if(!panel) return;
+  let html = '<div class="notif-panel-header"><strong>'+t('notifications')+'</strong><button class="notif-mark-all" onclick="markAllGuestNotificationsRead(event)">'+t('mark_all_read')+'</button></div>';
+  if(GUEST_NOTIF_LAST_ERROR && GUEST_NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('notif_error')+'</div>';
+  } else if(GUEST_NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('no_notifications_yet')+'</div>';
+  } else {
+    html += GUEST_NOTIF_LIST.slice(0,50).map(function(n){
+      return '<div class="notif-item '+(n.read_at?'read':'')+'" onclick="openGuestNotification(event, '+n.id+')">'
+        + '<div class="notif-dot"></div>'
+        + '<div style="flex:1; min-width:0;">'
+        + '<div class="notif-title">'+escapeHtml(guestNotifTitle(n))+'</div>'
+        + (n.body ? '<div class="notif-body">'+escapeHtml(n.body)+'</div>' : '')
+        + '<div class="notif-time">'+notifTimeLabel(n.created_at)+'</div>'
+        + '</div></div>';
+    }).join('');
+  }
+  panel.innerHTML = html;
+}
+function toggleGuestNotifPanel(ev){
+  if(ev) ev.stopPropagation();
+  const panel = document.getElementById('guest-notif-panel');
+  if(!panel) return;
+  GUEST_NOTIF_PANEL_OPEN = !GUEST_NOTIF_PANEL_OPEN;
+  panel.style.display = GUEST_NOTIF_PANEL_OPEN ? 'block' : 'none';
+  if(GUEST_NOTIF_PANEL_OPEN) refreshGuestNotifList();
+}
+if(!window.__guestNotifOutsideClickHooked){
+  window.__guestNotifOutsideClickHooked = true;
+  document.addEventListener('click', function(ev){
+    if(!GUEST_NOTIF_PANEL_OPEN) return;
+    const panel = document.getElementById('guest-notif-panel');
+    const wrap = panel ? panel.closest('.notif-wrap') : null;
+    if(wrap && !wrap.contains(ev.target)){
+      GUEST_NOTIF_PANEL_OPEN = false;
+      if(panel) panel.style.display = 'none';
+    }
+  });
+}
+async function markAllGuestNotificationsRead(ev){
+  if(ev) ev.stopPropagation();
+  try{
+    await apiCall('/api/notifications/read-all', {method:'POST', token: getGuestToken()});
+  }catch(e){ }
+  await refreshGuestNotificationCount();
+  if(GUEST_NOTIF_PANEL_OPEN) await refreshGuestNotifList();
+}
+function highlightGuestRequest(requestId){
+  setTimeout(function(){
+    const el = document.getElementById('req-item-'+requestId);
+    if(!el) return;
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.style.transition = 'background-color .3s ease';
+    const prevBg = el.style.backgroundColor;
+    el.style.backgroundColor = 'var(--accent2)';
+    setTimeout(function(){ el.style.backgroundColor = prevBg; }, 1500);
+  }, 60);
+}
+async function openGuestNotification(ev, id){
+  if(ev) ev.stopPropagation();
+  const n = GUEST_NOTIF_LIST.find(function(x){ return x.id===id; });
+  if(n && !n.read_at){
+    try{
+      await apiCall('/api/notifications/'+id+'/read', {method:'PATCH', token: getGuestToken()});
+    }catch(e){ }
+    await refreshGuestNotificationCount();
+  }
+  toggleGuestNotifPanel();
+  if(n && n.type==='request_status_changed' && n.target_id){
+    const req = CACHE.requests.find(function(r){ return String(r.id)===String(n.target_id); });
+    if(req){
+      nav(req.dept);
+      highlightGuestRequest(req.id);
+    }
+  }
+}
+function resetGuestNotifState(){
+  GUEST_NOTIF_UNREAD_COUNT = 0;
+  GUEST_NOTIF_LIST = [];
+  GUEST_NOTIF_PANEL_OPEN = false;
+  GUEST_NOTIF_LAST_ERROR = false;
+  const badge = document.getElementById('guest-notif-badge');
+  if(badge) badge.style.display = 'none';
+  const panel = document.getElementById('guest-notif-panel');
   if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
 }
 
@@ -1156,6 +1308,7 @@ async function refreshOpsData(){
       staffRender();
     } else if(S.loggedIn && getGuestToken()){
       const token = getGuestToken();
+      await refreshGuestNotificationCount();
       const reqs = await apiCall('/api/requests/mine', {token});
       CACHE.requests = reqs.map(mapBackendRequest);
       // Keep the Offers tab fresh while the guest is looking at it (e.g. a
@@ -1218,7 +1371,7 @@ const DICT = {
     restaurant_name:"مطعم الكرم", spa_name:"نخيل سبا وعافية",
     greeting:"أهلاً", room_label:"غرفة", quick_actions:"إجراءات سريعة",
     notifications:"الإشعارات", view_all:"عرض الكل",
-    mark_all_read:"تعليم الكل كمقروء", no_notifications_yet:"لا توجد إشعارات بعد", notif_type_new_request:"طلب جديد", notif_type_request_escalated:"طلب متأخر عن الوقت المحدد", notif_type_new_message:"رسالة جديدة من نزيل", notif_type_staff_reply:"رد جديد من الفريق", notif_error:"تعذر تحميل الإشعارات", 
+    mark_all_read:"تعليم الكل كمقروء", no_notifications_yet:"لا توجد إشعارات بعد", notif_type_new_request:"طلب جديد", notif_type_request_escalated:"طلب متأخر عن الوقت المحدد", notif_type_new_message:"رسالة جديدة من نزيل", notif_type_staff_reply:"رد جديد من الفريق", notif_error:"تعذر تحميل الإشعارات", notif_type_request_status_changed:"تحديث حالة طلبك", 
     add:"إضافة", cart:"السلة", total:"الإجمالي", place_order:"إرسال الطلب",
     submit_request:"إرسال الطلب", request_sent:"تم إرسال طلبك بنجاح",
     dnd:"عدم الإزعاج", cleaning_time:"وقت التنظيف المفضل", schedule:"جدولة",
@@ -1409,7 +1562,7 @@ const DICT = {
     restaurant_name:"Al Karam Restaurant", spa_name:"Nakheel Spa & Wellness",
     greeting:"Welcome", room_label:"Room", quick_actions:"Quick Actions",
     notifications:"Notifications", view_all:"View all",
-    mark_all_read:"Mark all as read", no_notifications_yet:"No notifications yet", notif_type_new_request:"New request", notif_type_request_escalated:"Request overdue", notif_type_new_message:"New guest message", notif_type_staff_reply:"New reply from staff", notif_error:"Could not load notifications", 
+    mark_all_read:"Mark all as read", no_notifications_yet:"No notifications yet", notif_type_new_request:"New request", notif_type_request_escalated:"Request overdue", notif_type_new_message:"New guest message", notif_type_staff_reply:"New reply from staff", notif_error:"Could not load notifications", notif_type_request_status_changed:"Your request status changed", 
     add:"Add", cart:"Cart", total:"Total", place_order:"Place Order",
     submit_request:"Submit Request", request_sent:"Your request was sent successfully",
     dnd:"Do Not Disturb", cleaning_time:"Preferred Cleaning Time", schedule:"Schedule",
@@ -1716,6 +1869,7 @@ async function unifiedLogin(btn){
 function doLogout(){
   S.loggedIn = false; saveState();
   setGuestToken(null);
+  resetGuestNotifState();
   if(REFRESH_TIMER){ clearInterval(REFRESH_TIMER); REFRESH_TIMER=null; }
   toast(t('logged_out'));
   document.getElementById('app').classList.remove('active');
@@ -2290,7 +2444,7 @@ function requestsList(dept){
   if(items.length===0) return '';
   return `<div class="card" style="margin-top:18px;">
     <strong style="display:block; margin-bottom:10px;">${LANG==='ar'?'طلباتي':'My Requests'}</strong>
-    ${items.map(r=>`<div class="list-item"><span>${escapeHtml(opsTitle(r))}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
+    ${items.map(r=>`<div class="list-item" id="req-item-${r.id}" data-request-id="${r.id}"><span>${escapeHtml(opsTitle(r))}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
   </div>`;
 }
 async function pushRequest(dept, title){
