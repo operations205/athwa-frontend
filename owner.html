@@ -53,6 +53,18 @@ button{font-family:inherit;}
 }
 .icon-btn:hover{background:#E9DEC4;}
 .badge{position:absolute; top:-4px; inset-inline-end:-4px; background:var(--danger); color:#fff; font-size:10px; border-radius:10px; padding:1px 5px; font-weight:700;}
+.notif-panel{position:absolute; top:46px; inset-inline-end:0; width:340px; max-width:90vw; max-height:420px; overflow-y:auto; background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 30px rgba(1,8,23,.18); z-index:50; padding:8px;}
+.notif-panel-header{display:flex; align-items:center; justify-content:space-between; padding:6px 8px 10px; border-bottom:1px solid var(--border); margin-bottom:6px;}
+.notif-panel-header strong{font-size:14px;}
+.notif-mark-all{background:none; border:none; color:var(--accent2); font-size:12px; font-weight:700; cursor:pointer; padding:4px;}
+.notif-item{display:flex; gap:8px; align-items:flex-start; padding:10px 8px; border-radius:10px; cursor:pointer; font-size:13px;}
+.notif-item:hover{background:var(--panel2);}
+.notif-item .notif-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); flex-shrink:0; margin-top:5px;}
+.notif-item.read .notif-dot{background:transparent;}
+.notif-item .notif-title{font-weight:700; margin-bottom:2px;}
+.notif-item .notif-body{color:var(--muted); font-size:12px;}
+.notif-item .notif-time{color:var(--muted); font-size:11px; margin-top:2px;}
+.notif-empty{padding:24px 12px; text-align:center; color:var(--muted); font-size:13px;}
 .lang-toggle{
   border:1px solid var(--border); background:var(--panel2); color:var(--text);
   border-radius:20px; padding:8px 14px; cursor:pointer; font-size:13px; font-weight:600;
@@ -332,7 +344,14 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
     <div class="brand"><img src="assets/athwa-lockup-light-bg.svg" alt="ATHWA" class="brand-lockup"> <span style="font-size:12px; color:var(--muted); font-family:inherit;" id="staff-role-label"></span></div>
     <div class="topbar-right">
       <button class="lang-toggle" onclick="toggleLang()"><span id="lang-label-staff">English</span></button>
-      <button class="icon-btn" onclick="staffLogout()" title="Logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+      <div class="notif-wrap" style="position:relative;">
+<button class="icon-btn" onclick="toggleNotifPanel(event)" title="Notifications" id="notif-bell-btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+<span class="badge" id="notif-badge" style="display:none;">0</span>
+</button>
+<div class="notif-panel" id="notif-panel" style="display:none;"></div>
+</div>
+<button class="icon-btn" onclick="staffLogout()" title="Logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
     </div>
   </div>
 
@@ -384,6 +403,153 @@ async function apiCall(path, opts){
   try{ data = await res.json(); }catch(e){}
   if(!res.ok){ const err = new Error((data&&data.error)||'Request failed'); err.status=res.status; err.data=data; throw err; }
   return data;
+}
+/* ---------------- Notifications (bell/badge/panel) ----------------
+ * Covers the event types the backend currently emits: new_request,
+ * request_escalated (SLA overdue), new_message (guest -> reception),
+ * staff_reply (staff -> guest). The backend does NOT yet emit a
+ * notification for "assignment" or "guest status change" - those two
+ * event types are not wired up anywhere server-side yet, so nothing
+ * appears here for them either. Unknown/future types fall back to a
+ * generic label (raw title/type) instead of being hidden.
+ */
+const NOTIF_TYPE_LABELS = {
+  new_request: 'notif_type_new_request',
+  request_escalated: 'notif_type_request_escalated',
+  new_message: 'notif_type_new_message',
+  staff_reply: 'notif_type_staff_reply',
+};
+let NOTIF_UNREAD_COUNT = 0;
+let NOTIF_LIST = [];
+let NOTIF_PANEL_OPEN = false;
+let NOTIF_LAST_ERROR = false;
+
+function notifTitle(n){
+  const key = NOTIF_TYPE_LABELS[n.type];
+  return key ? t(key) : (n.title || n.type);
+}
+function notifTimeLabel(iso){
+  try{
+    const d = new Date(iso);
+    return d.toLocaleString(LANG==='ar' ? 'ar' : 'en', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  }catch(e){ return ''; }
+}
+function notifTargetPage(n){
+  // No dedicated staff-side "messages" inbox page exists yet in this app,
+  // so a message-type notification's best available deep link is the
+  // requests page (still bounded by the viewer's own department/hotel
+  // scope, same as every other staff page) rather than a specific thread.
+  return 'requests';
+}
+async function refreshStaffNotificationCount(){
+  if(!(S.staff.loggedIn && getStaffToken()) || S.staff.role==='platform_admin') return;
+  try{
+    const data = await apiCall('/api/notifications/unread-count', {token: getStaffToken()});
+    NOTIF_UNREAD_COUNT = data.count||0;
+    NOTIF_LAST_ERROR = false;
+  }catch(e){
+    // A failed poll must never break the rest of the screen - keep the
+    // last-known badge value and just try again on the next tick.
+    NOTIF_LAST_ERROR = true;
+  }
+  renderNotifBadge();
+  if(NOTIF_PANEL_OPEN) refreshNotifList();
+}
+function renderNotifBadge(){
+  const badge = document.getElementById('notif-badge');
+  if(!badge) return;
+  if(NOTIF_UNREAD_COUNT > 0){
+    badge.style.display = 'inline-block';
+    badge.textContent = NOTIF_UNREAD_COUNT > 99 ? '99+' : String(NOTIF_UNREAD_COUNT);
+  } else {
+    badge.style.display = 'none';
+  }
+}
+async function refreshNotifList(){
+  if(!(S.staff.loggedIn && getStaffToken())) return;
+  try{
+    NOTIF_LIST = await apiCall('/api/notifications', {token: getStaffToken()});
+    NOTIF_LAST_ERROR = false;
+  }catch(e){
+    NOTIF_LAST_ERROR = true;
+  }
+  renderNotifPanel();
+}
+function renderNotifPanel(){
+  const panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  let html = '<div class="notif-panel-header"><strong>'+t('notifications')+'</strong><button class="notif-mark-all" onclick="markAllNotificationsRead(event)">'+t('mark_all_read')+'</button></div>';
+  if(NOTIF_LAST_ERROR && NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('notif_error')+'</div>';
+  } else if(NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('no_notifications_yet')+'</div>';
+  } else {
+    html += NOTIF_LIST.slice(0,50).map(function(n){
+      return '<div class="notif-item '+(n.read_at?'read':'')+'" onclick="openNotification(event, '+n.id+')">'
+        + '<div class="notif-dot"></div>'
+        + '<div style="flex:1; min-width:0;">'
+        + '<div class="notif-title">'+escapeHtml(notifTitle(n))+'</div>'
+        + (n.body ? '<div class="notif-body">'+escapeHtml(n.body)+'</div>' : '')
+        + '<div class="notif-time">'+notifTimeLabel(n.created_at)+'</div>'
+        + '</div></div>';
+    }).join('');
+  }
+  panel.innerHTML = html;
+}
+function toggleNotifPanel(ev){
+  if(ev) ev.stopPropagation();
+  const panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  NOTIF_PANEL_OPEN = !NOTIF_PANEL_OPEN;
+  panel.style.display = NOTIF_PANEL_OPEN ? 'block' : 'none';
+  if(NOTIF_PANEL_OPEN) refreshNotifList();
+}
+if(!window.__notifOutsideClickHooked){
+  window.__notifOutsideClickHooked = true;
+  document.addEventListener('click', function(ev){
+    if(!NOTIF_PANEL_OPEN) return;
+    const panel = document.getElementById('notif-panel');
+    const wrap = panel ? panel.closest('.notif-wrap') : null;
+    if(wrap && !wrap.contains(ev.target)){
+      NOTIF_PANEL_OPEN = false;
+      if(panel) panel.style.display = 'none';
+    }
+  });
+}
+async function markAllNotificationsRead(ev){
+  if(ev) ev.stopPropagation();
+  try{
+    await apiCall('/api/notifications/read-all', {method:'POST', token: getStaffToken()});
+  }catch(e){ /* best-effort; the refresh below reflects whatever the server actually has */ }
+  await refreshStaffNotificationCount();
+  if(NOTIF_PANEL_OPEN) await refreshNotifList();
+}
+async function openNotification(ev, id){
+  if(ev) ev.stopPropagation();
+  const n = NOTIF_LIST.find(function(x){ return x.id===id; });
+  if(n && !n.read_at){
+    try{
+      await apiCall('/api/notifications/'+id+'/read', {method:'PATCH', token: getStaffToken()});
+    }catch(e){ /* deep-link navigation still proceeds even if marking read failed */ }
+    await refreshStaffNotificationCount();
+  }
+  toggleNotifPanel();
+  if(n && (n.target_type==='request' || n.target_type==='message')){
+    staffNav(notifTargetPage(n));
+  }
+}
+// Clears all in-memory notification state on logout/account switch, so a
+// re-login (same device, different account) never briefly shows the
+// previous account's stale badge count or list before the first real poll.
+function resetNotifState(){
+  NOTIF_UNREAD_COUNT = 0;
+  NOTIF_LIST = [];
+  NOTIF_PANEL_OPEN = false;
+  NOTIF_LAST_ERROR = false;
+  const badge = document.getElementById('notif-badge');
+  if(badge) badge.style.display = 'none';
+  const panel = document.getElementById('notif-panel');
+  if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
 }
 const FRONT_TO_BACK_STATUS = {pending:'pending', progress:'in_progress', done:'completed'};
 const BACK_TO_FRONT_STATUS = {pending:'pending', acknowledged:'pending', in_progress:'progress', completed:'done', cancelled:'done'};
@@ -961,6 +1127,7 @@ function staffRenderSearchResultsOnly(){
 }
 async function refreshOpsData(){
   try{
+    if(S.staff.loggedIn && getStaffToken() && S.staff.role !== 'platform_admin'){ await refreshStaffNotificationCount(); }
     // platform_admin has no hotel scope - it manages hotels platform-wide, not
     // a single hotel's requests/feedback/prearrivals (those endpoints are
     // 403'd for this role server-side), so poll whichever admin section is
@@ -1049,6 +1216,10 @@ const DICT = {
     restaurant_name:"مطعم الكرم", spa_name:"نخيل سبا وعافية",
     greeting:"أهلاً", room_label:"غرفة", quick_actions:"إجراءات سريعة",
     notifications:"الإشعارات", view_all:"عرض الكل",
+    mark_all_read:"تعليم الكل كمقروء", no_notifications_yet:"لا توجد إشعارات بعد",
+    notif_type_new_request:"طلب جديد", notif_type_request_escalated:"طلب متأخر عن الوقت المحدد",
+    notif_type_new_message:"رسالة جديدة من نزيل", notif_type_staff_reply:"رد جديد من الفريق",
+    notif_error:"تعذر تحميل الإشعارات",
     add:"إضافة", cart:"السلة", total:"الإجمالي", place_order:"إرسال الطلب",
     submit_request:"إرسال الطلب", request_sent:"تم إرسال طلبك بنجاح",
     dnd:"عدم الإزعاج", cleaning_time:"وقت التنظيف المفضل", schedule:"جدولة",
@@ -1239,6 +1410,10 @@ const DICT = {
     restaurant_name:"Al Karam Restaurant", spa_name:"Nakheel Spa & Wellness",
     greeting:"Welcome", room_label:"Room", quick_actions:"Quick Actions",
     notifications:"Notifications", view_all:"View all",
+    mark_all_read:"Mark all as read", no_notifications_yet:"No notifications yet",
+    notif_type_new_request:"New request", notif_type_request_escalated:"Request overdue",
+    notif_type_new_message:"New guest message", notif_type_staff_reply:"New reply from staff",
+    notif_error:"Could not load notifications",
     add:"Add", cart:"Cart", total:"Total", place_order:"Place Order",
     submit_request:"Submit Request", request_sent:"Your request was sent successfully",
     dnd:"Do Not Disturb", cleaning_time:"Preferred Cleaning Time", schedule:"Schedule",
@@ -2468,6 +2643,7 @@ function staffLogout(){
   S.staff = {loggedIn:false, role:null, dept:null, name:''};
   saveState();
   setStaffToken(null);
+  resetNotifState();
   if(REFRESH_TIMER){ clearInterval(REFRESH_TIMER); REFRESH_TIMER=null; }
   document.getElementById('staff-app').classList.remove('active');
   renderLogin();
