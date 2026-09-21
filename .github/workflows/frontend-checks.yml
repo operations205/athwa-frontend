@@ -27,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # A syntax error inside an inline <script> is invisible to a diff review
       # and breaks the entire page at runtime, so check it first and cheaply.

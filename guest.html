@@ -390,10 +390,13 @@ const API_BASE = (function(){
   return map[location.hostname] || 'https://athwa-backend-943m.onrender.com';
 })();
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
-function getGuestToken(){ return localStorage.getItem('athwa_guest_token'); }
-function setGuestToken(tok){ if(tok) localStorage.setItem('athwa_guest_token', tok); else localStorage.removeItem('athwa_guest_token'); }
-function getStaffToken(){ return localStorage.getItem('athwa_staff_token'); }
-function setStaffToken(tok){ if(tok) localStorage.setItem('athwa_staff_token', tok); else localStorage.removeItem('athwa_staff_token'); }
+// Authentication and user-specific state are tab-session data. Keeping
+// them in localStorage would leave guest identity, room information and
+// bearer tokens on shared devices after the browser is closed.
+function getGuestToken(){ return sessionStorage.getItem('athwa_guest_token'); }
+function setGuestToken(tok){ if(tok) sessionStorage.setItem('athwa_guest_token', tok); else sessionStorage.removeItem('athwa_guest_token'); }
+function getStaffToken(){ return sessionStorage.getItem('athwa_staff_token'); }
+function setStaffToken(tok){ if(tok) sessionStorage.setItem('athwa_staff_token', tok); else sessionStorage.removeItem('athwa_staff_token'); }
 async function apiCall(path, opts){
   opts = opts || {};
   const headers = {'Content-Type':'application/json'};
@@ -1799,8 +1802,14 @@ function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function loadState(){
-  const raw = localStorage.getItem(STATE_KEY);
-  if(raw) return JSON.parse(raw);
+  const raw = sessionStorage.getItem(STATE_KEY);
+  if(raw){
+    try{ return JSON.parse(raw); }
+    catch(e){ sessionStorage.removeItem(STATE_KEY); }
+  }
+  return defaultState();
+}
+function defaultState(){
   return {
     guest:{name:'', room:''},
     loggedIn:false,
@@ -1820,7 +1829,11 @@ function loadState(){
   };
 }
 let S = loadState();
-function saveState(){ localStorage.setItem(STATE_KEY, JSON.stringify(S)); }
+function saveState(){ sessionStorage.setItem(STATE_KEY, JSON.stringify(S)); }
+function resetSessionState(){
+  S = defaultState();
+  saveState();
+}
 
 function toast(msg){
   const wrap = document.getElementById('toast-wrap');
@@ -1852,9 +1865,11 @@ async function unifiedLogin(btn){
     return;
   }
   if(slowTimer) clearTimeout(slowTimer);
+  resetSessionState();
 
   if(res.type === 'guest'){
     setGuestToken(res.token);
+    setStaffToken(null);
     S.guest = {name: res.guest.name, room: res.guest.room, hotelName: res.guest.hotelName||'', enabledDepartments: res.guest.enabledDepartments || ALL_DEPARTMENTS};
     S.loggedIn = true;
     saveState();
@@ -1871,6 +1886,7 @@ async function unifiedLogin(btn){
     nav(hasPrearrival ? 'dashboard' : 'prearrival');
   } else {
     setStaffToken(res.token);
+    setGuestToken(null);
     // backend role names: owner, manager, dept_manager, staff -> frontend uses 'dept' for dept_manager/staff
     const backendRole = res.user.role;
     const frontRole = (backendRole==='dept_manager'||backendRole==='staff') ? 'dept' : backendRole;
@@ -1888,8 +1904,9 @@ async function unifiedLogin(btn){
   }
 }
 function doLogout(){
-  S.loggedIn = false; saveState();
+  resetSessionState();
   setGuestToken(null);
+  setStaffToken(null);
   resetGuestNotifState();
   if(REFRESH_TIMER){ clearInterval(REFRESH_TIMER); REFRESH_TIMER=null; }
   toast(t('logged_out'));
@@ -2716,7 +2733,9 @@ async function adminLogin(btn){
     if(btn){ btn.disabled = false; btn.textContent = origText; }
     return;
   }
+  resetSessionState();
   setStaffToken(res.token);
+  setGuestToken(null);
   S.staff = {loggedIn:true, role:'platform_admin', dept:null, name:res.user.name, adminScope:res.user.adminScope||'full'};
   saveState();
   document.getElementById('login-screen').style.display='none';
@@ -2811,9 +2830,9 @@ async function submitResetPassword(token, btn){
   }
 }
 function staffLogout(){
-  S.staff = {loggedIn:false, role:null, dept:null, name:''};
-  saveState();
+  resetSessionState();
   setStaffToken(null);
+  setGuestToken(null);
   resetNotifState();
   if(REFRESH_TIMER){ clearInterval(REFRESH_TIMER); REFRESH_TIMER=null; }
   document.getElementById('staff-app').classList.remove('active');
