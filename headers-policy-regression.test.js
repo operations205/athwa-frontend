@@ -57,7 +57,7 @@ for (const [name, expected] of Object.entries(REQUIRED)) {
 const src = fs.readFileSync(FILES[0], 'utf8');
 const apiBaseBlock = src.slice(src.indexOf('const API_BASE'), src.indexOf('const API_BASE') + 800);
 const runtimeOrigins = [...new Set(
-  (apiBaseBlock.match(/https:\/\/[a-z0-9.-]+\.onrender\.com/g) || [])
+  (apiBaseBlock.match(/https:\/\/[a-z0-9.-]+/g) || [])
 )];
 
 if (runtimeOrigins.length === 0) {
@@ -73,7 +73,7 @@ for (const origin of runtimeOrigins) {
 for (const file of FILES.slice(1)) {
   const other = fs.readFileSync(file, 'utf8');
   const block = other.slice(other.indexOf('const API_BASE'), other.indexOf('const API_BASE') + 800);
-  const origins = [...new Set((block.match(/https:\/\/[a-z0-9.-]+\.onrender\.com/g) || []))];
+  const origins = [...new Set((block.match(/https:\/\/[a-z0-9.-]+/g) || []))];
   if (origins.join(',') !== runtimeOrigins.join(',')) {
     failures.push(`${file} has a different API_BASE backend set (${origins.join(', ')}) than ${FILES[0]} (${runtimeOrigins.join(', ')})`);
   }
