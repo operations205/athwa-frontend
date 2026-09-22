@@ -778,6 +778,7 @@ async function submitCreateHotel(btn){
   if(!name || !slug || !ownerName || !ownerEmail || !ownerPassword){
     toast(LANG==='ar'?'من فضلك أكمل كل الحقول':'Please fill in all fields'); return;
   }
+  if(ownerPassword.length < 12){ toast(t('password_too_short')); return; }
   const origText = btn.textContent; btn.disabled = true;
   try{
     const token = getStaffToken();
@@ -1048,6 +1049,7 @@ async function submitAddPlatformAdmin(btn){
   const scopeEl = document.getElementById('pa-scope');
   const adminScope = scopeEl ? scopeEl.value : 'readonly';
   if(!name || !email || !password){ toast(LANG==='ar'?'كل الحقول مطلوبة':'All fields are required'); return; }
+  if(password.length < 12){ toast(t('password_too_short')); return; }
   const origText = btn.textContent; btn.disabled = true;
   try{
     const token = getStaffToken();
@@ -1275,7 +1277,7 @@ const DICT = {
     confirm_password_label:"تأكيد كلمة المرور",
     reset_password_btn:"تغيير كلمة المرور",
     passwords_dont_match:"كلمتا المرور غير متطابقتين",
-    password_too_short:"كلمة المرور لازم تكون 8 أحرف على الأقل",
+    password_too_short:"كلمة المرور لازم تكون 12 حرفًا على الأقل",
     password_reset_success:"تم تغيير كلمة المرور بنجاح، سجّل الدخول بكلمة المرور الجديدة",
     reset_link_invalid:"رابط الاستعادة غير صالح أو منتهي الصلاحية. اطلب رابط جديد.",
     platform_overview:"نظرة عامة على المنصة",
@@ -1469,7 +1471,7 @@ const DICT = {
     confirm_password_label:"Confirm password",
     reset_password_btn:"Change password",
     passwords_dont_match:"Passwords don't match",
-    password_too_short:"Password must be at least 8 characters",
+    password_too_short:"Password must be at least 12 characters",
     password_reset_success:"Password changed successfully — sign in with your new password",
     reset_link_invalid:"This reset link is invalid or has expired. Please request a new one.",
     platform_overview:"Platform Overview",
@@ -2633,11 +2635,11 @@ function renderResetPassword(token){
     <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('reset_password_title')}</h2>
     <div class="field" style="text-align:start;">
       <label>${t('new_password_label')}</label>
-      <input type="password" id="rp-pass1" placeholder="•••••••">
+      <input type="password" id="rp-pass1" minlength="12" maxlength="128" placeholder="••••••••••••">
     </div>
     <div class="field" style="text-align:start;">
       <label>${t('confirm_password_label')}</label>
-      <input type="password" id="rp-pass2" placeholder="•••••••">
+      <input type="password" id="rp-pass2" minlength="12" maxlength="128" placeholder="••••••••••••">
     </div>
     <button class="btn full" onclick="submitResetPassword(this)" ${ACTIVE_RESET_TOKEN?'':'disabled'}>${t('reset_password_btn')}</button>
   `;
@@ -2647,7 +2649,7 @@ async function submitResetPassword(btn){
   if(!token){ toast(t('reset_link_invalid')); return; }
   const p1 = document.getElementById('rp-pass1').value;
   const p2 = document.getElementById('rp-pass2').value;
-  if(p1.length < 8){ toast(t('password_too_short')); return; }
+  if(p1.length < 12){ toast(t('password_too_short')); return; }
   if(p1 !== p2){ toast(t('passwords_dont_match')); return; }
   const origText = btn.textContent; btn.disabled = true;
   try{
@@ -3704,7 +3706,7 @@ const STAFF_RENDERERS = {
           <div class="field"><label>${t('hotel_slug')}</label><input id="nh-slug" placeholder="zahret-alsharq"></div>
           <div class="field"><label>${t('owner_name')}</label><input id="nh-owner-name"></div>
           <div class="field"><label>${t('owner_email')}</label><input id="nh-owner-email" type="email"></div>
-          <div class="field"><label>${t('owner_password')}</label><input id="nh-owner-pass" type="password"></div>
+          <div class="field"><label>${t('owner_password')}</label><input id="nh-owner-pass" type="password" minlength="12" maxlength="128"></div>
         </div>
         <div class="row" style="gap:8px; margin-top:6px;">
           <button class="btn" onclick="submitCreateHotel(this)">${t('create_hotel_btn')}</button>
@@ -4187,7 +4189,7 @@ const STAFF_RENDERERS = {
           <div class="grid grid-2">
             <div class="field"><label>${t('new_admin_name')}</label><input id="pa-name"></div>
             <div class="field"><label>${t('new_admin_email')}</label><input id="pa-email" type="email"></div>
-            <div class="field"><label>${t('new_admin_password')}</label><input id="pa-password" type="password"></div>
+            <div class="field"><label>${t('new_admin_password')}</label><input id="pa-password" type="password" minlength="12" maxlength="128"></div>
             <div class="field"><label>${t('new_admin_scope')}</label>
               <select id="pa-scope">
                 <option value="readonly">${t('admin_scope_readonly')}</option>
