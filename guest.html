@@ -60,7 +60,7 @@ button{font-family:inherit;}
 .notif-item{display:flex; gap:8px; align-items:flex-start; padding:10px 8px; border-radius:10px; cursor:pointer; font-size:13px;}
 .notif-item:hover{background:var(--panel2);}
 .notif-item .notif-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); flex-shrink:0; margin-top:5px;}
-.notif-item.read .notif-dot{background:transparent;}
+.notif-item.read{opacity:.62; background:var(--panel2);}.notif-item.read .notif-dot{background:transparent;}
 .notif-item .notif-title{font-weight:700; margin-bottom:2px;}
 .notif-item .notif-body{color:var(--muted); font-size:12px;}
 .notif-item .notif-time{color:var(--muted); font-size:11px; margin-top:2px;}
@@ -383,13 +383,13 @@ window.ATHWA_ENTRY = 'unified';
 // production's stricter CORS/CSP, which is what surfaced this).
 const API_BASE = (function(){
   const map = {
-    'athwa.app': 'https://api.athwa.app',
-    'www.athwa.app': 'https://api.athwa.app',
-    'athwa-app-staging.onrender.com': 'https://athwa-backend-staging.onrender.com',
+    'athwa.app': 'https://athwa-backend-3xz4.onrender.com',
+    'www.athwa.app': 'https://athwa-backend-3xz4.onrender.com',
+    
     'athwa-app-staging-6hc1.onrender.com': 'https://athwa-backend-staging-ml5x.onrender.com',
-    'athwa-app-utex.onrender.com': 'https://athwa-backend-943m.onrender.com',
+    'athwa-app-utex.onrender.com': 'https://athwa-backend-3xz4.onrender.com',
   };
-  return map[location.hostname] || 'https://athwa-backend-943m.onrender.com';
+  return map[location.hostname] || 'https://athwa-backend-3xz4.onrender.com';
 })();
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
 // Authentication and user-specific state are tab-session data. Keeping
@@ -1773,7 +1773,6 @@ function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
 // to its display label. dept_manager/staff share the 'role_dept' label since
 // the DICT only distinguishes owner/manager/department-level/platform roles.
 function roleLabel(role){
-  if(role==='dept_manager' || role==='staff') return t('role_dept');
   return escapeHtml(t('role_'+role));
 }
 
@@ -2850,7 +2849,7 @@ function staffLogout(){
 }
 function updateStaffRoleLabel(){
   const el = document.getElementById('staff-role-label');
-  if(el) el.textContent = '· ' + ((S.staff.role==='dept_manager'||S.staff.role==='staff') ? t('nav_'+S.staff.dept) : t('role_'+S.staff.role));
+  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? t('role_dept_manager') : t('role_'+S.staff.role));
 }
 
 /* ---------------- Staff nav ---------------- */
