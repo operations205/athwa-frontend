@@ -131,6 +131,8 @@ const idCallsMustBeNumberWrapped = [
   "setRedemptionStatus(${Number(r.id)},'confirmed')",
   "setRedemptionStatus(${Number(r.id)},'cancelled')",
   "advanceStatus(${Number(r.id)})",
+  "toggleHotelSelected(${Number(h.id)}, this.checked)",
+  "openHotelSettings(${Number(a.hotelId)})",
 ];
 for (const s of idCallsMustBeNumberWrapped) {
   assert.ok(src.includes(s), `expected Number()-wrapped id call missing from index.html: ${s}`);
@@ -146,6 +148,19 @@ const oldUnwrappedIdCalls = [
 for (const s of oldUnwrappedIdCalls) {
   assert.ok(!src.includes(s), `old unwrapped id call still present in index.html: ${s}`);
 }
+
+// The reset token comes directly from the URL. It must never be interpolated
+// into an inline JavaScript handler, even after ad-hoc quote stripping. Keep it
+// in a private runtime variable, accept only the backend's 64-character hex
+// format, and let the button handler receive only the button element.
+assert.ok(!src.includes("submitResetPassword('${token"),
+  'password-reset token must not be interpolated into inline JavaScript');
+assert.ok(src.includes("ACTIVE_RESET_TOKEN = /^[a-f0-9]{64}$/i.test(String(token || ''))"),
+  'password-reset token must be validated against the backend-issued format');
+assert.ok(src.includes('onclick="submitResetPassword(this)"'),
+  'password-reset button must pass only its own element to the handler');
+assert.ok(src.includes('const token = ACTIVE_RESET_TOKEN;'),
+  'password-reset submission must read the validated runtime token');
 
 // ---------------------------------------------------------------------
 // 6) Functional test: real escapeHtml()/t() against payloads beyond <img>,

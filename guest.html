@@ -53,6 +53,19 @@ button{font-family:inherit;}
 }
 .icon-btn:hover{background:#E9DEC4;}
 .badge{position:absolute; top:-4px; inset-inline-end:-4px; background:var(--danger); color:#fff; font-size:10px; border-radius:10px; padding:1px 5px; font-weight:700;}
+.notif-panel{position:absolute; top:46px; inset-inline-end:0; width:340px; max-width:90vw; max-height:420px; overflow-y:auto; background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:0 10px 30px rgba(1,8,23,.18); z-index:50; padding:8px;}
+.notif-panel-header{display:flex; align-items:center; justify-content:space-between; padding:6px 8px 10px; border-bottom:1px solid var(--border); margin-bottom:6px;}
+.notif-panel-header strong{font-size:14px;}
+.notif-mark-all{background:none; border:none; color:var(--accent2); font-size:12px; font-weight:700; cursor:pointer; padding:4px;}
+.notif-item{display:flex; gap:8px; align-items:flex-start; padding:10px 8px; border-radius:10px; cursor:pointer; font-size:13px;}
+.notif-item:hover{background:var(--panel2);}
+.notif-item .notif-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); flex-shrink:0; margin-top:5px;}
+.notif-item.read{opacity:.62; background:var(--panel2);}.notif-item.read .notif-dot{background:transparent;}
+.notif-item .notif-title{font-weight:700; margin-bottom:2px;}
+.notif-item .notif-body{color:var(--muted); font-size:12px;}
+.notif-item .notif-time{color:var(--muted); font-size:11px; margin-top:2px;}
+.notif-empty{padding:24px 12px; text-align:center; color:var(--muted); font-size:13px;}
+
 .lang-toggle{
   border:1px solid var(--border); background:var(--panel2); color:var(--text);
   border-radius:20px; padding:8px 14px; cursor:pointer; font-size:13px; font-weight:600;
@@ -309,9 +322,12 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
       <button class="icon-btn" onclick="nav('messages')" title="Messages">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="badge" id="msg-badge">1</span>
       </button>
-      <button class="icon-btn" onclick="nav('dashboard')" title="Notifications">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg><span class="badge" id="notif-badge">2</span>
+      <div class="notif-wrap" style="position:relative;">
+      <button class="icon-btn" onclick="toggleGuestNotifPanel(event)" title="Notifications" id="guest-notif-bell-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg><span class="badge" id="guest-notif-badge" style="display:none;">0</span>
       </button>
+      <div class="notif-panel" id="guest-notif-panel" style="display:none;"></div>
+      </div>
       <button class="icon-btn" onclick="doLogout()" title="Logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
     </div>
   </div>
@@ -332,6 +348,13 @@ footer.legal{color:var(--muted); font-size:11.5px; text-align:center; padding:16
     <div class="brand"><img src="assets/athwa-lockup-light-bg.svg" alt="ATHWA" class="brand-lockup"> <span style="font-size:12px; color:var(--muted); font-family:inherit;" id="staff-role-label"></span></div>
     <div class="topbar-right">
       <button class="lang-toggle" onclick="toggleLang()"><span id="lang-label-staff">English</span></button>
+      <div class="notif-wrap" style="position:relative;">
+<button class="icon-btn" onclick="toggleNotifPanel(event)" title="Notifications" id="notif-bell-btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+<span class="badge" id="notif-badge" style="display:none;">0</span>
+</button>
+<div class="notif-panel" id="notif-panel" style="display:none;"></div>
+</div>
       <button class="icon-btn" onclick="staffLogout()" title="Logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
     </div>
   </div>
@@ -360,16 +383,22 @@ window.ATHWA_ENTRY = 'unified';
 // production's stricter CORS/CSP, which is what surfaced this).
 const API_BASE = (function(){
   const map = {
-    'athwa-app-staging.onrender.com': 'https://athwa-backend-staging.onrender.com',
+    'athwa.app': 'https://athwa-backend-3xz4.onrender.com',
+    'www.athwa.app': 'https://athwa-backend-3xz4.onrender.com',
+    
+    'athwa-app-staging-6hc1.onrender.com': 'https://athwa-backend-staging-ml5x.onrender.com',
     'athwa-app-utex.onrender.com': 'https://athwa-backend-3xz4.onrender.com',
   };
   return map[location.hostname] || 'https://athwa-backend-3xz4.onrender.com';
 })();
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
-function getGuestToken(){ return localStorage.getItem('athwa_guest_token'); }
-function setGuestToken(tok){ if(tok) localStorage.setItem('athwa_guest_token', tok); else localStorage.removeItem('athwa_guest_token'); }
-function getStaffToken(){ return localStorage.getItem('athwa_staff_token'); }
-function setStaffToken(tok){ if(tok) localStorage.setItem('athwa_staff_token', tok); else localStorage.removeItem('athwa_staff_token'); }
+// Authentication and user-specific state are tab-session data. Keeping
+// them in localStorage would leave guest identity, room information and
+// bearer tokens on shared devices after the browser is closed.
+function getGuestToken(){ return sessionStorage.getItem('athwa_guest_token'); }
+function setGuestToken(tok){ if(tok) sessionStorage.setItem('athwa_guest_token', tok); else sessionStorage.removeItem('athwa_guest_token'); }
+function getStaffToken(){ return sessionStorage.getItem('athwa_staff_token'); }
+function setStaffToken(tok){ if(tok) sessionStorage.setItem('athwa_staff_token', tok); else sessionStorage.removeItem('athwa_staff_token'); }
 async function apiCall(path, opts){
   opts = opts || {};
   const headers = {'Content-Type':'application/json'};
@@ -385,6 +414,323 @@ async function apiCall(path, opts){
   if(!res.ok){ const err = new Error((data&&data.error)||'Request failed'); err.status=res.status; err.data=data; throw err; }
   return data;
 }
+/* ---------------- Notifications (bell/badge/panel) ----------------
+ * Covers the event types the backend currently emits: new_request,
+ * request_escalated (SLA overdue), new_message (guest -> reception),
+ * staff_reply (staff -> guest). The backend does NOT yet emit a
+ * notification for "assignment" or "guest status change" - those two
+ * event types are not wired up anywhere server-side yet, so nothing
+ * appears here for them either. Unknown/future types fall back to a
+ * generic label (raw title/type) instead of being hidden.
+ */
+const NOTIF_TYPE_LABELS = {
+  new_request: 'notif_type_new_request',
+  request_escalated: 'notif_type_request_escalated',
+  new_message: 'notif_type_new_message',
+  staff_reply: 'notif_type_staff_reply',
+};
+let NOTIF_UNREAD_COUNT = 0;
+let NOTIF_LIST = [];
+let NOTIF_PANEL_OPEN = false;
+let NOTIF_LAST_ERROR = false;
+
+function notifTitle(n){
+  const key = NOTIF_TYPE_LABELS[n.type];
+  return key ? t(key) : (n.title || n.type);
+}
+function notifTimeLabel(iso){
+  try{
+    const d = new Date(iso);
+    return d.toLocaleString(LANG==='ar' ? 'ar' : 'en', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  }catch(e){ return ''; }
+}
+function notifTargetPage(n){
+  // No dedicated staff-side "messages" inbox page exists yet in this app,
+  // so a message-type notification's best available deep link is the
+  // requests page (still bounded by the viewer's own department/hotel
+  // scope, same as every other staff page) rather than a specific thread.
+  return 'requests';
+}
+async function refreshStaffNotificationCount(){
+  if(!(S.staff.loggedIn && getStaffToken()) || S.staff.role==='platform_admin') return;
+  try{
+    const data = await apiCall('/api/notifications/unread-count', {token: getStaffToken()});
+    NOTIF_UNREAD_COUNT = data.count||0;
+    NOTIF_LAST_ERROR = false;
+  }catch(e){
+    // A failed poll must never break the rest of the screen - keep the
+    // last-known badge value and just try again on the next tick.
+    NOTIF_LAST_ERROR = true;
+  }
+  renderNotifBadge();
+  if(NOTIF_PANEL_OPEN) refreshNotifList();
+}
+function renderNotifBadge(){
+  const badge = document.getElementById('notif-badge');
+  if(!badge) return;
+  if(NOTIF_UNREAD_COUNT > 0){
+    badge.style.display = 'inline-block';
+    badge.textContent = NOTIF_UNREAD_COUNT > 99 ? '99+' : String(NOTIF_UNREAD_COUNT);
+  } else {
+    badge.style.display = 'none';
+  }
+}
+async function refreshNotifList(){
+  if(!(S.staff.loggedIn && getStaffToken())) return;
+  try{
+    NOTIF_LIST = await apiCall('/api/notifications', {token: getStaffToken()});
+    NOTIF_LAST_ERROR = false;
+  }catch(e){
+    NOTIF_LAST_ERROR = true;
+  }
+  renderNotifPanel();
+}
+function renderNotifPanel(){
+  const panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  let html = '<div class="notif-panel-header"><strong>'+t('notifications')+'</strong><button class="notif-mark-all" onclick="markAllNotificationsRead(event)">'+t('mark_all_read')+'</button></div>';
+  if(NOTIF_LAST_ERROR && NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('notif_error')+'</div>';
+  } else if(NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('no_notifications_yet')+'</div>';
+  } else {
+    html += NOTIF_LIST.slice(0,50).map(function(n){
+      return '<div class="notif-item '+(n.read_at?'read':'')+'" onclick="openNotification(event, '+n.id+')">'
+        + '<div class="notif-dot"></div>'
+        + '<div style="flex:1; min-width:0;">'
+        + '<div class="notif-title">'+escapeHtml(notifTitle(n))+'</div>'
+        + (n.body ? '<div class="notif-body">'+escapeHtml(n.body)+'</div>' : '')
+        + '<div class="notif-time">'+notifTimeLabel(n.created_at)+'</div>'
+        + '</div></div>';
+    }).join('');
+  }
+  panel.innerHTML = html;
+}
+function toggleNotifPanel(ev){
+  if(ev) ev.stopPropagation();
+  const panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  NOTIF_PANEL_OPEN = !NOTIF_PANEL_OPEN;
+  panel.style.display = NOTIF_PANEL_OPEN ? 'block' : 'none';
+  if(NOTIF_PANEL_OPEN) refreshNotifList();
+}
+if(!window.__notifOutsideClickHooked){
+  window.__notifOutsideClickHooked = true;
+  document.addEventListener('click', function(ev){
+    if(!NOTIF_PANEL_OPEN) return;
+    const panel = document.getElementById('notif-panel');
+    const wrap = panel ? panel.closest('.notif-wrap') : null;
+    if(wrap && !wrap.contains(ev.target)){
+      NOTIF_PANEL_OPEN = false;
+      if(panel) panel.style.display = 'none';
+    }
+  });
+}
+async function markAllNotificationsRead(ev){
+  if(ev) ev.stopPropagation();
+  try{
+    await apiCall('/api/notifications/read-all', {method:'POST', token: getStaffToken()});
+  }catch(e){ /* best-effort; the refresh below reflects whatever the server actually has */ }
+  await refreshStaffNotificationCount();
+  if(NOTIF_PANEL_OPEN) await refreshNotifList();
+}
+async function openNotification(ev, id){
+  if(ev) ev.stopPropagation();
+  const n = NOTIF_LIST.find(function(x){ return x.id===id; });
+  if(n && !n.read_at){
+    try{
+      await apiCall('/api/notifications/'+id+'/read', {method:'PATCH', token: getStaffToken()});
+    }catch(e){ /* deep-link navigation still proceeds even if marking read failed */ }
+    await refreshStaffNotificationCount();
+  }
+  toggleNotifPanel();
+  if(n && (n.target_type==='request' || n.target_type==='message')){
+    staffNav(notifTargetPage(n));
+  }
+}
+// Clears all in-memory notification state on logout/account switch, so a
+// re-login (same device, different account) never briefly shows the
+// previous account's stale badge count or list before the first real poll.
+function resetNotifState(){
+  NOTIF_UNREAD_COUNT = 0;
+  NOTIF_LIST = [];
+  NOTIF_PANEL_OPEN = false;
+  NOTIF_LAST_ERROR = false;
+  const badge = document.getElementById('notif-badge');
+  if(badge) badge.style.display = 'none';
+  const panel = document.getElementById('notif-panel');
+  if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+
+/* ---------------- Guest-side notifications (bell/badge/panel) ----------------
+ * Mirrors the staff notification block above, but scoped to the guest's own
+ * session/token (getGuestToken()/S.loggedIn), never the staff token. Only
+ * the notification types the backend actually emits to guests are handled:
+ * staff_reply (a staff reply to this guest's message) and
+ * request_status_changed (this guest's own request changed status). A
+ * request_status_changed notification deep-links to the specific request by
+ * navigating to its department page and highlighting that exact request in
+ * the list (see requestsList()/highlightGuestRequest()). staff_reply has no
+ * dedicated conversation screen anywhere in this app yet (there is no
+ * frontend UI at all for the /api/messages guest<->reception thread - the
+ * existing "Messages" nav item is the separate AI concierge feature) so it
+ * cannot be given a real deep link without building that screen; clicking it
+ * only marks it read rather than pretending to navigate somewhere specific.
+ */
+const GUEST_NOTIF_TYPE_LABELS = {
+  staff_reply: 'notif_type_staff_reply',
+  request_status_changed: 'notif_type_request_status_changed',
+};
+let GUEST_NOTIF_UNREAD_COUNT = 0;
+let GUEST_NOTIF_LIST = [];
+let GUEST_NOTIF_PANEL_OPEN = false;
+let GUEST_NOTIF_LAST_ERROR = false;
+let GUEST_NOTIF_GEN = 0;
+
+function guestNotifTitle(n){
+  const key = GUEST_NOTIF_TYPE_LABELS[n.type];
+  return key ? t(key) : (n.title || n.type);
+}
+async function refreshGuestNotificationCount(){
+  if(!(S.loggedIn && getGuestToken())) return;
+  // A poll in flight when the guest logs out or switches accounts must never
+  // land after the fact and repopulate the badge/list with the previous
+  // guest's data - capture the session generation and discard the result if
+  // it changed (resetGuestNotifState() bumps it) while this call was pending.
+  const gen = GUEST_NOTIF_GEN;
+  try{
+    const data = await apiCall('/api/notifications/unread-count', {token: getGuestToken()});
+    if(gen !== GUEST_NOTIF_GEN) return;
+    GUEST_NOTIF_UNREAD_COUNT = data.count||0;
+    GUEST_NOTIF_LAST_ERROR = false;
+  }catch(e){
+    if(gen !== GUEST_NOTIF_GEN) return;
+    GUEST_NOTIF_LAST_ERROR = true;
+  }
+  if(gen !== GUEST_NOTIF_GEN) return;
+  renderGuestNotifBadge();
+  if(GUEST_NOTIF_PANEL_OPEN) refreshGuestNotifList();
+}
+function renderGuestNotifBadge(){
+  const badge = document.getElementById('guest-notif-badge');
+  if(!badge) return;
+  if(GUEST_NOTIF_UNREAD_COUNT > 0){
+    badge.style.display = 'inline-block';
+    badge.textContent = GUEST_NOTIF_UNREAD_COUNT > 99 ? '99+' : String(GUEST_NOTIF_UNREAD_COUNT);
+  } else {
+    badge.style.display = 'none';
+  }
+}
+async function refreshGuestNotifList(){
+  if(!(S.loggedIn && getGuestToken())) return;
+  const gen = GUEST_NOTIF_GEN;
+  try{
+    const list = await apiCall('/api/notifications', {token: getGuestToken()});
+    if(gen !== GUEST_NOTIF_GEN) return;
+    GUEST_NOTIF_LIST = list;
+    GUEST_NOTIF_LAST_ERROR = false;
+  }catch(e){
+    if(gen !== GUEST_NOTIF_GEN) return;
+    GUEST_NOTIF_LAST_ERROR = true;
+  }
+  if(gen !== GUEST_NOTIF_GEN) return;
+  renderGuestNotifPanel();
+}
+function renderGuestNotifPanel(){
+  const panel = document.getElementById('guest-notif-panel');
+  if(!panel) return;
+  let html = '<div class="notif-panel-header"><strong>'+t('notifications')+'</strong><button class="notif-mark-all" onclick="markAllGuestNotificationsRead(event)">'+t('mark_all_read')+'</button></div>';
+  if(GUEST_NOTIF_LAST_ERROR && GUEST_NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('notif_error')+'</div>';
+  } else if(GUEST_NOTIF_LIST.length===0){
+    html += '<div class="notif-empty">'+t('no_notifications_yet')+'</div>';
+  } else {
+    html += GUEST_NOTIF_LIST.slice(0,50).map(function(n){
+      return '<div class="notif-item '+(n.read_at?'read':'')+'" onclick="openGuestNotification(event, '+n.id+')">'
+        + '<div class="notif-dot"></div>'
+        + '<div style="flex:1; min-width:0;">'
+        + '<div class="notif-title">'+escapeHtml(guestNotifTitle(n))+'</div>'
+        + (n.body ? '<div class="notif-body">'+escapeHtml(n.body)+'</div>' : '')
+        + '<div class="notif-time">'+notifTimeLabel(n.created_at)+'</div>'
+        + '</div></div>';
+    }).join('');
+  }
+  panel.innerHTML = html;
+}
+function toggleGuestNotifPanel(ev){
+  if(ev) ev.stopPropagation();
+  const panel = document.getElementById('guest-notif-panel');
+  if(!panel) return;
+  GUEST_NOTIF_PANEL_OPEN = !GUEST_NOTIF_PANEL_OPEN;
+  panel.style.display = GUEST_NOTIF_PANEL_OPEN ? 'block' : 'none';
+  if(GUEST_NOTIF_PANEL_OPEN) refreshGuestNotifList();
+}
+if(!window.__guestNotifOutsideClickHooked){
+  window.__guestNotifOutsideClickHooked = true;
+  document.addEventListener('click', function(ev){
+    if(!GUEST_NOTIF_PANEL_OPEN) return;
+    const panel = document.getElementById('guest-notif-panel');
+    const wrap = panel ? panel.closest('.notif-wrap') : null;
+    if(wrap && !wrap.contains(ev.target)){
+      GUEST_NOTIF_PANEL_OPEN = false;
+      if(panel) panel.style.display = 'none';
+    }
+  });
+}
+async function markAllGuestNotificationsRead(ev){
+  if(ev) ev.stopPropagation();
+  try{
+    await apiCall('/api/notifications/read-all', {method:'POST', token: getGuestToken()});
+  }catch(e){ }
+  await refreshGuestNotificationCount();
+  if(GUEST_NOTIF_PANEL_OPEN) await refreshGuestNotifList();
+}
+function highlightGuestRequest(requestId){
+  setTimeout(function(){
+    const el = document.getElementById('req-item-'+requestId);
+    if(!el) return;
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.style.transition = 'background-color .3s ease';
+    const prevBg = el.style.backgroundColor;
+    el.style.backgroundColor = 'var(--accent2)';
+    setTimeout(function(){ el.style.backgroundColor = prevBg; }, 1500);
+  }, 60);
+}
+async function openGuestNotification(ev, id){
+  if(ev) ev.stopPropagation();
+  const n = GUEST_NOTIF_LIST.find(function(x){ return x.id===id; });
+  if(n && !n.read_at){
+    try{
+      await apiCall('/api/notifications/'+id+'/read', {method:'PATCH', token: getGuestToken()});
+    }catch(e){ }
+    await refreshGuestNotificationCount();
+  }
+  toggleGuestNotifPanel();
+  if(n && n.type==='request_status_changed' && n.target_id){
+    const req = CACHE.requests.find(function(r){ return String(r.id)===String(n.target_id); });
+    if(req){
+      nav(req.dept);
+      highlightGuestRequest(req.id);
+    }
+  } else if(n && n.type==='staff_reply'){
+    // No conversation screen exists yet for /api/messages (see the block
+    // comment above) - say so plainly instead of silently doing nothing,
+    // so the guest isn't left wondering why nothing happened.
+    toast(t('notif_staff_reply_no_conversation'));
+  }
+}
+function resetGuestNotifState(){
+  GUEST_NOTIF_GEN++;
+  GUEST_NOTIF_UNREAD_COUNT = 0;
+  GUEST_NOTIF_LIST = [];
+  GUEST_NOTIF_PANEL_OPEN = false;
+  GUEST_NOTIF_LAST_ERROR = false;
+  const badge = document.getElementById('guest-notif-badge');
+  if(badge) badge.style.display = 'none';
+  const panel = document.getElementById('guest-notif-panel');
+  if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+
 const FRONT_TO_BACK_STATUS = {pending:'pending', progress:'in_progress', done:'completed'};
 const BACK_TO_FRONT_STATUS = {pending:'pending', acknowledged:'pending', in_progress:'progress', completed:'done', cancelled:'done'};
 function mapBackendRequest(r){
@@ -607,6 +953,7 @@ async function submitCreateHotel(btn){
   if(!name || !slug || !ownerName || !ownerEmail || !ownerPassword){
     toast(LANG==='ar'?'من فضلك أكمل كل الحقول':'Please fill in all fields'); return;
   }
+  if(ownerPassword.length < 12){ toast(t('password_too_short')); return; }
   const origText = btn.textContent; btn.disabled = true;
   try{
     const token = getStaffToken();
@@ -877,6 +1224,7 @@ async function submitAddPlatformAdmin(btn){
   const scopeEl = document.getElementById('pa-scope');
   const adminScope = scopeEl ? scopeEl.value : 'readonly';
   if(!name || !email || !password){ toast(LANG==='ar'?'كل الحقول مطلوبة':'All fields are required'); return; }
+  if(password.length < 12){ toast(t('password_too_short')); return; }
   const origText = btn.textContent; btn.disabled = true;
   try{
     const token = getStaffToken();
@@ -961,6 +1309,7 @@ function staffRenderSearchResultsOnly(){
 }
 async function refreshOpsData(){
   try{
+    if(S.staff.loggedIn && getStaffToken() && S.staff.role !== 'platform_admin'){ await refreshStaffNotificationCount(); }
     // platform_admin has no hotel scope - it manages hotels platform-wide, not
     // a single hotel's requests/feedback/prearrivals (those endpoints are
     // 403'd for this role server-side), so poll whichever admin section is
@@ -987,6 +1336,7 @@ async function refreshOpsData(){
       staffRender();
     } else if(S.loggedIn && getGuestToken()){
       const token = getGuestToken();
+      await refreshGuestNotificationCount();
       const reqs = await apiCall('/api/requests/mine', {token});
       CACHE.requests = reqs.map(mapBackendRequest);
       // Keep the Offers tab fresh while the guest is looking at it (e.g. a
@@ -1046,9 +1396,10 @@ const DICT = {
     nav_entertainment:"الترفيه", nav_billing:"الفاتورة", nav_messages:"رسائل الفندق",
     nav_offers:"عروض وولاء", nav_events:"الفعاليات", nav_feedback:"التقييم", nav_checkout:"تسجيل المغادرة",
     hotel_name:"ATHWA", room_type:"جناح تنفيذي", handled_by:"المسؤول عن الطلب",
-    restaurant_name:"مطعم الياسمين", spa_name:"نخيل سبا وعافية",
+    restaurant_name:"مطعم الكرم", spa_name:"نخيل سبا وعافية",
     greeting:"أهلاً", room_label:"غرفة", quick_actions:"إجراءات سريعة",
     notifications:"الإشعارات", view_all:"عرض الكل",
+    mark_all_read:"تعليم الكل كمقروء", no_notifications_yet:"لا توجد إشعارات بعد", notif_type_new_request:"طلب جديد", notif_type_request_escalated:"طلب متأخر عن الوقت المحدد", notif_type_new_message:"رسالة جديدة من نزيل", notif_type_staff_reply:"رد جديد من الفريق", notif_error:"تعذر تحميل الإشعارات", notif_type_request_status_changed:"تحديث حالة طلبك", notif_staff_reply_no_conversation:"المحادثة المباشرة مع الفريق غير متاحة حاليًا في هذا التطبيق", 
     add:"إضافة", cart:"السلة", total:"الإجمالي", place_order:"إرسال الطلب",
     submit_request:"إرسال الطلب", request_sent:"تم إرسال طلبك بنجاح",
     dnd:"عدم الإزعاج", cleaning_time:"وقت التنظيف المفضل", schedule:"جدولة",
@@ -1099,7 +1450,7 @@ const DICT = {
     confirm_password_label:"تأكيد كلمة المرور",
     reset_password_btn:"تغيير كلمة المرور",
     passwords_dont_match:"كلمتا المرور غير متطابقتين",
-    password_too_short:"كلمة المرور لازم تكون 8 أحرف على الأقل",
+    password_too_short:"كلمة المرور لازم تكون 12 حرفًا على الأقل",
     password_reset_success:"تم تغيير كلمة المرور بنجاح، سجّل الدخول بكلمة المرور الجديدة",
     reset_link_invalid:"رابط الاستعادة غير صالح أو منتهي الصلاحية. اطلب رابط جديد.",
     platform_overview:"نظرة عامة على المنصة",
@@ -1236,9 +1587,10 @@ const DICT = {
     nav_entertainment:"Entertainment", nav_billing:"Billing", nav_messages:"Hotel Messages",
     nav_offers:"Offers & Loyalty", nav_events:"Events", nav_feedback:"Feedback", nav_checkout:"Check-out",
     hotel_name:"ATHWA", room_type:"Executive Suite", handled_by:"Handled by",
-    restaurant_name:"Al Yasmin Restaurant", spa_name:"Nakheel Spa & Wellness",
+    restaurant_name:"Al Karam Restaurant", spa_name:"Nakheel Spa & Wellness",
     greeting:"Welcome", room_label:"Room", quick_actions:"Quick Actions",
     notifications:"Notifications", view_all:"View all",
+    mark_all_read:"Mark all as read", no_notifications_yet:"No notifications yet", notif_type_new_request:"New request", notif_type_request_escalated:"Request overdue", notif_type_new_message:"New guest message", notif_type_staff_reply:"New reply from staff", notif_error:"Could not load notifications", notif_type_request_status_changed:"Your request status changed", notif_staff_reply_no_conversation:"Direct conversation with staff is not available in this app yet", 
     add:"Add", cart:"Cart", total:"Total", place_order:"Place Order",
     submit_request:"Submit Request", request_sent:"Your request was sent successfully",
     dnd:"Do Not Disturb", cleaning_time:"Preferred Cleaning Time", schedule:"Schedule",
@@ -1289,7 +1641,7 @@ const DICT = {
     confirm_password_label:"Confirm password",
     reset_password_btn:"Change password",
     passwords_dont_match:"Passwords don't match",
-    password_too_short:"Password must be at least 8 characters",
+    password_too_short:"Password must be at least 12 characters",
     password_reset_success:"Password changed successfully — sign in with your new password",
     reset_link_invalid:"This reset link is invalid or has expired. Please request a new one.",
     platform_overview:"Platform Overview",
@@ -1415,13 +1767,12 @@ const DICT = {
     no_data:"No data yet",
   }
 };
-let LANG = localStorage.getItem('athwa_lang') || 'ar';
+let LANG = localStorage.getItem('karam_lang') || 'ar';
 function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
 // Maps a raw DB role ('owner'|'manager'|'dept_manager'|'staff'|'platform_admin')
 // to its display label. dept_manager/staff share the 'role_dept' label since
 // the DICT only distinguishes owner/manager/department-level/platform roles.
 function roleLabel(role){
-  if(role==='dept_manager' || role==='staff') return t('role_dept');
   return escapeHtml(t('role_'+role));
 }
 
@@ -1443,7 +1794,7 @@ function applyLang(){
 }
 function toggleLang(){
   LANG = LANG === 'ar' ? 'en' : 'ar';
-  localStorage.setItem('athwa_lang', LANG);
+  localStorage.setItem('karam_lang', LANG);
   applyLang();
 }
 
@@ -1454,8 +1805,14 @@ function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function loadState(){
-  const raw = localStorage.getItem(STATE_KEY);
-  if(raw) return JSON.parse(raw);
+  const raw = sessionStorage.getItem(STATE_KEY);
+  if(raw){
+    try{ return JSON.parse(raw); }
+    catch(e){ sessionStorage.removeItem(STATE_KEY); }
+  }
+  return defaultState();
+}
+function defaultState(){
   return {
     guest:{name:'', room:''},
     loggedIn:false,
@@ -1475,7 +1832,11 @@ function loadState(){
   };
 }
 let S = loadState();
-function saveState(){ localStorage.setItem(STATE_KEY, JSON.stringify(S)); }
+function saveState(){ sessionStorage.setItem(STATE_KEY, JSON.stringify(S)); }
+function resetSessionState(){
+  S = defaultState();
+  saveState();
+}
 
 function toast(msg){
   const wrap = document.getElementById('toast-wrap');
@@ -1507,9 +1868,11 @@ async function unifiedLogin(btn){
     return;
   }
   if(slowTimer) clearTimeout(slowTimer);
+  resetSessionState();
 
   if(res.type === 'guest'){
     setGuestToken(res.token);
+    setStaffToken(null);
     S.guest = {name: res.guest.name, room: res.guest.room, hotelName: res.guest.hotelName||'', enabledDepartments: res.guest.enabledDepartments || ALL_DEPARTMENTS};
     S.loggedIn = true;
     saveState();
@@ -1526,6 +1889,7 @@ async function unifiedLogin(btn){
     nav(hasPrearrival ? 'dashboard' : 'prearrival');
   } else {
     setStaffToken(res.token);
+    setGuestToken(null);
     // backend role names: owner, manager, dept_manager, staff -> frontend uses 'dept' for dept_manager/staff
     const backendRole = res.user.role;
     const frontRole = (backendRole==='dept_manager'||backendRole==='staff') ? 'dept' : backendRole;
@@ -1543,8 +1907,10 @@ async function unifiedLogin(btn){
   }
 }
 function doLogout(){
-  S.loggedIn = false; saveState();
+  resetSessionState();
   setGuestToken(null);
+  setStaffToken(null);
+  resetGuestNotifState();
   if(REFRESH_TIMER){ clearInterval(REFRESH_TIMER); REFRESH_TIMER=null; }
   toast(t('logged_out'));
   document.getElementById('app').classList.remove('active');
@@ -2119,7 +2485,7 @@ function requestsList(dept){
   if(items.length===0) return '';
   return `<div class="card" style="margin-top:18px;">
     <strong style="display:block; margin-bottom:10px;">${LANG==='ar'?'طلباتي':'My Requests'}</strong>
-    ${items.map(r=>`<div class="list-item"><span>${escapeHtml(opsTitle(r))}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
+    ${items.map(r=>`<div class="list-item" id="req-item-${r.id}" data-request-id="${r.id}"><span>${escapeHtml(opsTitle(r))}</span><span class="pill ${r.status==='done'?'':'warn'}">${r.status==='done'?t('status_done'):t('status_pending')}</span></div>`).join('')}
   </div>`;
 }
 async function pushRequest(dept, title){
@@ -2370,7 +2736,9 @@ async function adminLogin(btn){
     if(btn){ btn.disabled = false; btn.textContent = origText; }
     return;
   }
+  resetSessionState();
   setStaffToken(res.token);
+  setGuestToken(null);
   S.staff = {loggedIn:true, role:'platform_admin', dept:null, name:res.user.name, adminScope:res.user.adminScope||'full'};
   saveState();
   document.getElementById('login-screen').style.display='none';
@@ -2426,7 +2794,9 @@ async function submitForgotPassword(isAdmin, btn){
 // Reached via the emailed link (?reset=<token> in the URL, handled in boot()
 // below) rather than from a nav click, so it takes the token directly instead
 // of reading it from a click handler's closure.
+let ACTIVE_RESET_TOKEN = null;
 function renderResetPassword(token){
+  ACTIVE_RESET_TOKEN = /^[a-f0-9]{64}$/i.test(String(token || '')) ? String(token) : null;
   const card = document.getElementById('login-card');
   if(!card) return;
   card.style.maxWidth = '380px';
@@ -2435,19 +2805,21 @@ function renderResetPassword(token){
     <h2 style="margin:0 0 4px; font-family:Georgia,'Times New Roman',serif;">${t('reset_password_title')}</h2>
     <div class="field" style="text-align:start;">
       <label>${t('new_password_label')}</label>
-      <input type="password" id="rp-pass1" placeholder="•••••••">
+      <input type="password" id="rp-pass1" minlength="12" maxlength="128" placeholder="••••••••••••">
     </div>
     <div class="field" style="text-align:start;">
       <label>${t('confirm_password_label')}</label>
-      <input type="password" id="rp-pass2" placeholder="•••••••">
+      <input type="password" id="rp-pass2" minlength="12" maxlength="128" placeholder="••••••••••••">
     </div>
-    <button class="btn full" onclick="submitResetPassword('${token.replace(/'/g,'')}', this)">${t('reset_password_btn')}</button>
+    <button class="btn full" onclick="submitResetPassword(this)" ${ACTIVE_RESET_TOKEN?'':'disabled'}>${t('reset_password_btn')}</button>
   `;
 }
-async function submitResetPassword(token, btn){
+async function submitResetPassword(btn){
+  const token = ACTIVE_RESET_TOKEN;
+  if(!token){ toast(t('reset_link_invalid')); return; }
   const p1 = document.getElementById('rp-pass1').value;
   const p2 = document.getElementById('rp-pass2').value;
-  if(p1.length < 8){ toast(t('password_too_short')); return; }
+  if(p1.length < 12){ toast(t('password_too_short')); return; }
   if(p1 !== p2){ toast(t('passwords_dont_match')); return; }
   const origText = btn.textContent; btn.disabled = true;
   try{
@@ -2457,6 +2829,7 @@ async function submitResetPassword(token, btn){
     // form with an already-consumed (now-invalid) token.
     const url = new URL(location.href); url.searchParams.delete('reset');
     history.replaceState({}, '', url.toString());
+    ACTIVE_RESET_TOKEN = null;
     renderLogin();
   }catch(e){
     toast(e.message || t('reset_link_invalid'));
@@ -2465,9 +2838,10 @@ async function submitResetPassword(token, btn){
   }
 }
 function staffLogout(){
-  S.staff = {loggedIn:false, role:null, dept:null, name:''};
-  saveState();
+  resetSessionState();
   setStaffToken(null);
+  setGuestToken(null);
+  resetNotifState();
   if(REFRESH_TIMER){ clearInterval(REFRESH_TIMER); REFRESH_TIMER=null; }
   document.getElementById('staff-app').classList.remove('active');
   renderLogin();
@@ -2475,7 +2849,7 @@ function staffLogout(){
 }
 function updateStaffRoleLabel(){
   const el = document.getElementById('staff-role-label');
-  if(el) el.textContent = '· ' + ((S.staff.role==='dept_manager'||S.staff.role==='staff') ? t('nav_'+S.staff.dept) : t('role_'+S.staff.role));
+  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? t('role_dept_manager') : t('role_'+S.staff.role));
 }
 
 /* ---------------- Staff nav ---------------- */
@@ -3463,7 +3837,7 @@ const STAFF_RENDERERS = {
       const billingPillClass = billingStatus==='overdue' ? 'danger' : billingStatus==='suspended' ? 'danger' : billingStatus==='trial' ? 'info' : '';
       return `
         <tr data-search="${escapeHtml(searchKey)}">
-          <td><input type="checkbox" ${isArchived?'disabled':''} ${ADMIN_HOTELS_SELECTED.has(h.id)?'checked':''} onchange="toggleHotelSelected(${h.id}, this.checked)"></td>
+          <td><input type="checkbox" ${isArchived?'disabled':''} ${ADMIN_HOTELS_SELECTED.has(h.id)?'checked':''} onchange="toggleHotelSelected(${Number(h.id)}, this.checked)"></td>
           <td><strong>${escapeHtml(h.name)}</strong><div style="color:var(--muted); font-size:11.5px;">${escapeHtml(h.slug)}</div></td>
           <td><span class="pill ${isArchived ? 'danger' : (h.active?'':'danger')}">${isArchived ? t('status_archived') : (h.active?t('status_active'):t('status_inactive'))}</span></td>
           <td>${escapeHtml(t('plan_'+(h.plan||'essential')))}</td>
@@ -3502,8 +3876,8 @@ const STAFF_RENDERERS = {
           <div class="field"><label>${t('hotel_display_name')}</label><input id="nh-name" placeholder="Zahret Al-Sharq Hotel"></div>
           <div class="field"><label>${t('hotel_slug')}</label><input id="nh-slug" placeholder="zahret-alsharq"></div>
           <div class="field"><label>${t('owner_name')}</label><input id="nh-owner-name"></div>
-          <div class="field"><label>${t('owner_email')}</label><input id="nh-owner-email" type="email" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')"></div>
-          <div class="field"><label>${t('owner_password')}</label><input id="nh-owner-pass" type="password" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')"></div>
+          <div class="field"><label>${t('owner_email')}</label><input id="nh-owner-email" type="email"></div>
+          <div class="field"><label>${t('owner_password')}</label><input id="nh-owner-pass" type="password" minlength="12" maxlength="128"></div>
         </div>
         <div class="row" style="gap:8px; margin-top:6px;">
           <button class="btn" onclick="submitCreateHotel(this)">${t('create_hotel_btn')}</button>
@@ -3935,7 +4309,7 @@ const STAFF_RENDERERS = {
               ${a.meta && a.meta.billingNextDue ? ' · ' + new Date(a.meta.billingNextDue).toLocaleDateString() : ''}
             </div>
           </div>
-          ${a.hotelId ? `<button class="btn sm secondary" onclick="openHotelSettings(${a.hotelId})">${t('hotel_settings')}</button>` : ''}
+          ${a.hotelId ? `<button class="btn sm secondary" onclick="openHotelSettings(${Number(a.hotelId)})">${t('hotel_settings')}</button>` : ''}
         </div>`).join('')}
     `;
   },
@@ -3986,7 +4360,7 @@ const STAFF_RENDERERS = {
           <div class="grid grid-2">
             <div class="field"><label>${t('new_admin_name')}</label><input id="pa-name"></div>
             <div class="field"><label>${t('new_admin_email')}</label><input id="pa-email" type="email"></div>
-            <div class="field"><label>${t('new_admin_password')}</label><input id="pa-password" type="password"></div>
+            <div class="field"><label>${t('new_admin_password')}</label><input id="pa-password" type="password" minlength="12" maxlength="128"></div>
             <div class="field"><label>${t('new_admin_scope')}</label>
               <select id="pa-scope">
                 <option value="readonly">${t('admin_scope_readonly')}</option>
