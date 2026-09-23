@@ -60,7 +60,7 @@ button{font-family:inherit;}
 .notif-item{display:flex; gap:8px; align-items:flex-start; padding:10px 8px; border-radius:10px; cursor:pointer; font-size:13px;}
 .notif-item:hover{background:var(--panel2);}
 .notif-item .notif-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); flex-shrink:0; margin-top:5px;}
-.notif-item.read .notif-dot{background:transparent;}
+.notif-item.read{opacity:.62; background:var(--panel2);}.notif-item.read .notif-dot{background:transparent;}
 .notif-item .notif-title{font-weight:700; margin-bottom:2px;}
 .notif-item .notif-body{color:var(--muted); font-size:12px;}
 .notif-item .notif-time{color:var(--muted); font-size:11px; margin-top:2px;}
@@ -380,13 +380,13 @@ window.ATHWA_ENTRY = 'unified';
 // production's stricter CORS/CSP, which is what surfaced this).
 const API_BASE = (function(){
   const map = {
-    'athwa.app': 'https://api.athwa.app',
-    'www.athwa.app': 'https://api.athwa.app',
-    'athwa-app-staging.onrender.com': 'https://athwa-backend-staging.onrender.com',
+    'athwa.app': 'https://athwa-backend-3xz4.onrender.com',
+    'www.athwa.app': 'https://athwa-backend-3xz4.onrender.com',
+    
     'athwa-app-staging-6hc1.onrender.com': 'https://athwa-backend-staging-ml5x.onrender.com',
-    'athwa-app-utex.onrender.com': 'https://athwa-backend-943m.onrender.com',
+    'athwa-app-utex.onrender.com': 'https://athwa-backend-3xz4.onrender.com',
   };
-  return map[location.hostname] || 'https://athwa-backend-943m.onrender.com';
+  return map[location.hostname] || 'https://athwa-backend-3xz4.onrender.com';
 })();
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
 // Authentication and user-specific state are tab-session data. Keeping
@@ -528,6 +528,10 @@ async function markAllNotificationsRead(ev){
   try{
     await apiCall('/api/notifications/read-all', {method:'POST', token: getStaffToken()});
   }catch(e){ /* best-effort; the refresh below reflects whatever the server actually has */ }
+  NOTIF_LIST = NOTIF_LIST.map(function(n){ return Object.assign({}, n, {read_at:n.read_at || new Date().toISOString()}); });
+  NOTIF_UNREAD_COUNT = 0;
+  renderNotifBadge();
+  renderNotifPanel();
   await refreshStaffNotificationCount();
   if(NOTIF_PANEL_OPEN) await refreshNotifList();
 }
@@ -559,6 +563,40 @@ function resetNotifState(){
   if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
 }
 
+/* Guest notification panel: uses a separate badge/panel namespace from the staff shell. */
+const GUEST_NOTIF_TYPE_LABELS = { staff_reply:'notif_type_staff_reply', request_status_changed:'notif_type_request_status_changed' };
+let GUEST_NOTIF_UNREAD_COUNT=0, GUEST_NOTIF_LIST=[], GUEST_NOTIF_PANEL_OPEN=false, GUEST_NOTIF_LAST_ERROR=false, GUEST_NOTIF_GEN=0;
+function guestNotifTitle(n){ const key=GUEST_NOTIF_TYPE_LABELS[n.type]; return key?t(key):(n.title||n.type); }
+async function refreshGuestNotificationCount(){
+  if(!(S.loggedIn && getGuestToken())) return;
+  const gen=GUEST_NOTIF_GEN;
+  try { const data=await apiCall('/api/notifications/unread-count',{token:getGuestToken()}); if(gen!==GUEST_NOTIF_GEN)return; GUEST_NOTIF_UNREAD_COUNT=data.count||0; GUEST_NOTIF_LAST_ERROR=false; }
+  catch(e){ if(gen!==GUEST_NOTIF_GEN)return; GUEST_NOTIF_LAST_ERROR=true; }
+  if(gen!==GUEST_NOTIF_GEN)return; renderGuestNotifBadge(); if(GUEST_NOTIF_PANEL_OPEN) refreshGuestNotifList();
+}
+function renderGuestNotifBadge(){ const b=document.getElementById('guest-notif-badge'); if(!b)return; b.style.display=GUEST_NOTIF_UNREAD_COUNT>0?'inline-block':'none'; b.textContent=GUEST_NOTIF_UNREAD_COUNT>99?'99+':String(GUEST_NOTIF_UNREAD_COUNT); }
+async function refreshGuestNotifList(){
+  if(!(S.loggedIn && getGuestToken())) return; const gen=GUEST_NOTIF_GEN;
+  try { const list=await apiCall('/api/notifications',{token:getGuestToken()}); if(gen!==GUEST_NOTIF_GEN)return; GUEST_NOTIF_LIST=list; GUEST_NOTIF_LAST_ERROR=false; }
+  catch(e){ if(gen!==GUEST_NOTIF_GEN)return; GUEST_NOTIF_LAST_ERROR=true; }
+  if(gen===GUEST_NOTIF_GEN) renderGuestNotifPanel();
+}
+function renderGuestNotifPanel(){
+  const p=document.getElementById('guest-notif-panel'); if(!p)return;
+  let h='<div class="notif-panel-header"><strong>'+t('notifications')+'</strong><button class="notif-mark-all" onclick="markAllGuestNotificationsRead(event)">'+t('mark_all_read')+'</button></div>';
+  if(GUEST_NOTIF_LAST_ERROR&&GUEST_NOTIF_LIST.length===0) h+='<div class="notif-empty">'+t('notif_error')+'</div>';
+  else if(GUEST_NOTIF_LIST.length===0) h+='<div class="notif-empty">'+t('no_notifications_yet')+'</div>';
+  else h+=GUEST_NOTIF_LIST.slice(0,50).map(n=>'<div class="notif-item '+(n.read_at?'read':'')+'" onclick="openGuestNotification(event,'+n.id+')"><div class="notif-dot"></div><div style="flex:1;min-width:0;"><div class="notif-title">'+escapeHtml(guestNotifTitle(n))+'</div>'+(n.body?'<div class="notif-body">'+escapeHtml(n.body)+'</div>':'')+'<div class="notif-time">'+notifTimeLabel(n.created_at)+'</div></div></div>').join('');
+  p.innerHTML=h;
+}
+function toggleGuestNotifPanel(ev){ if(ev)ev.stopPropagation(); const p=document.getElementById('guest-notif-panel'); if(!p)return; GUEST_NOTIF_PANEL_OPEN=!GUEST_NOTIF_PANEL_OPEN; p.style.display=GUEST_NOTIF_PANEL_OPEN?'block':'none'; if(GUEST_NOTIF_PANEL_OPEN)refreshGuestNotifList(); }
+async function markAllGuestNotificationsRead(ev){
+  if(ev)ev.stopPropagation();
+  try{ await apiCall('/api/notifications/read-all',{method:'POST',token:getGuestToken()}); }catch(e){}
+  GUEST_NOTIF_LIST=GUEST_NOTIF_LIST.map(n=>Object.assign({},n,{read_at:n.read_at||new Date().toISOString()})); GUEST_NOTIF_UNREAD_COUNT=0; renderGuestNotifBadge(); renderGuestNotifPanel(); await refreshGuestNotificationCount();
+}
+async function openGuestNotification(ev,id){ if(ev)ev.stopPropagation(); const n=GUEST_NOTIF_LIST.find(x=>x.id===id); if(n&&!n.read_at){ try{await apiCall('/api/notifications/'+id+'/read',{method:'PATCH',token:getGuestToken()});}catch(e){} await refreshGuestNotificationCount(); } if(n){ n.read_at=n.read_at||new Date().toISOString(); renderGuestNotifPanel(); } }
+function resetGuestNotifState(){ GUEST_NOTIF_GEN++; GUEST_NOTIF_UNREAD_COUNT=0; GUEST_NOTIF_LIST=[]; GUEST_NOTIF_PANEL_OPEN=false; GUEST_NOTIF_LAST_ERROR=false; const b=document.getElementById('guest-notif-badge'); if(b)b.style.display='none'; const p=document.getElementById('guest-notif-panel'); if(p){p.style.display='none';p.innerHTML='';} }
 const FRONT_TO_BACK_STATUS = {pending:'pending', progress:'in_progress', done:'completed'};
 const BACK_TO_FRONT_STATUS = {pending:'pending', acknowledged:'pending', in_progress:'progress', completed:'done', cancelled:'done'};
 function mapBackendRequest(r){
@@ -1600,7 +1638,6 @@ function t(key){ return (DICT[LANG] && DICT[LANG][key]) || key; }
 // to its display label. dept_manager/staff share the 'role_dept' label since
 // the DICT only distinguishes owner/manager/department-level/platform roles.
 function roleLabel(role){
-  if(role==='dept_manager' || role==='staff') return t('role_dept');
   return escapeHtml(t('role_'+role));
 }
 
@@ -1700,6 +1737,7 @@ async function unifiedLogin(btn){
 
   if(res.type === 'guest'){
     setGuestToken(res.token);
+    resetGuestNotifState();
     setStaffToken(null);
     S.guest = {name: res.guest.name, room: res.guest.room, hotelName: res.guest.hotelName||'', enabledDepartments: res.guest.enabledDepartments || ALL_DEPARTMENTS};
     S.loggedIn = true;
@@ -1737,6 +1775,7 @@ async function unifiedLogin(btn){
 function doLogout(){
   resetSessionState();
   setGuestToken(null);
+  resetGuestNotifState();
   setStaffToken(null);
   if(REFRESH_TIMER){ clearInterval(REFRESH_TIMER); REFRESH_TIMER=null; }
   toast(t('logged_out'));
@@ -2676,7 +2715,7 @@ function staffLogout(){
 }
 function updateStaffRoleLabel(){
   const el = document.getElementById('staff-role-label');
-  if(el) el.textContent = '· ' + ((S.staff.role==='dept_manager'||S.staff.role==='staff') ? t('nav_'+S.staff.dept) : t('role_'+S.staff.role));
+  if(el) el.textContent = '· ' + (S.staff.role==='dept' ? t('role_dept_manager') : t('role_'+S.staff.role));
 }
 
 /* ---------------- Staff nav ---------------- */
