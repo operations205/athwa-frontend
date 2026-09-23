@@ -361,9 +361,9 @@ window.ATHWA_ENTRY = 'unified';
 const API_BASE = (function(){
   const map = {
     'athwa-app-staging.onrender.com': 'https://athwa-backend-staging.onrender.com',
-    'athwa-app-utex.onrender.com': 'https://athwa-backend-943m.onrender.com',
+    'athwa-app-utex.onrender.com': 'https://athwa-backend-3xz4.onrender.com',
   };
-  return map[location.hostname] || 'https://athwa-backend-943m.onrender.com';
+  return map[location.hostname] || 'https://athwa-backend-3xz4.onrender.com';
 })();
 const HOTEL_SLUG = new URLSearchParams(location.search).get('hotel') || 'zahret-alsharq';
 function getGuestToken(){ return localStorage.getItem('athwa_guest_token'); }
