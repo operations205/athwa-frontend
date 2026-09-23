@@ -3304,9 +3304,9 @@ function hpDepartmentsTab(h){
   const enabled = h.enabled_departments || [];
   return `
     <div class="card">
-      <div class="grid grid-2" style="margin-bottom:14px;">
+      <div class="dept-grid" style="margin-bottom:14px;">
         ${ALL_DEPARTMENTS.map(d=>`
-          <label class="row" style="gap:6px; font-size:13.5px;">
+          <label class="dept-check">
             <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
             <span>${escapeHtml(t('nav_'+d))}</span>
           </label>
