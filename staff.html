@@ -99,7 +99,8 @@ main{flex:1; overflow-y:auto; padding:22px; min-width:0;}
 .grid-2{grid-template-columns:repeat(2,1fr);}
 .dept-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:10px;}
 .dept-check{display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px; background:var(--panel2); font-size:13.5px; overflow:hidden;}
-.dept-check input{flex-shrink:0;}
+.dept-check{cursor:pointer;}
+.dept-check input{flex:0 0 auto; width:18px; height:18px; margin:0; padding:0; accent-color:var(--accent);}
 .dept-check span{flex:1 1 auto; min-width:0; overflow-wrap:break-word;}
 @media(max-width:980px){.grid-4{grid-template-columns:repeat(2,1fr);} .grid-3{grid-template-columns:repeat(2,1fr);}}
 
@@ -134,6 +135,7 @@ input,select,textarea{
   width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text);
   border-radius:10px; padding:11px 12px; font-size:14px; outline:none;
 }
+input[type="checkbox"],input[type="radio"]{width:auto; padding:0;}
 input:focus,select:focus,textarea:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(198,161,116,.22);}
 label{font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:6px; display:block;}
 .field{margin-bottom:14px;}
@@ -1428,7 +1430,7 @@ const DICT = {
     username:"البريد الإلكتروني", password:"كلمة المرور", select_department:"اختر القسم",
     back:"رجوع", demo_hint:"وضع تجريبي — أي بيانات دخول تعمل",
     staff_nav_overview:"نظرة عامة", staff_nav_requests:"كل الطلبات",
-    staff_nav_prearrivals:"قبل الوصول", staff_nav_feedback:"التقييمات", staff_nav_offers:"العروض والإيرادات",
+    staff_nav_guests:"الضيوف", staff_nav_team:"فريق العمل", guests_add_new:"تسجيل دخول ضيف", guests_none:"لا يوجد ضيوف مسجلين بعد", guest_checkin_date:"تاريخ الوصول", guest_checkout_date:"تاريخ المغادرة", guest_checkout_btn:"تسجيل خروج", guest_checked_out:"غادر", guest_in_house:"مقيم", guest_created_title:"تم تسجيل الضيف - سلّمه بيانات الدخول دي", guest_code_once:"كود الدخول بيظهر مرة واحدة بس. لو ضاع، سجّل خروج الضيف وسجّله من جديد.", guest_login_link:"رابط دخول الضيف", guest_login_room:"رقم الغرفة (اسم المستخدم)", guest_login_code:"كود الدخول (كلمة المرور)", guest_checkout_confirm:"تأكيد تسجيل خروج الضيف؟ هيفقد الدخول للتطبيق فورًا.", guest_required:"من فضلك اكتب اسم الضيف ورقم الغرفة", done_label:"تم", team_add_new:"إضافة موظف", team_none:"لا يوجد موظفين بعد", team_password_hint:"12 حرف على الأقل - سلّمها للموظف وهو يقدر يغيّرها من \"نسيت كلمة المرور\"", team_required:"من فضلك اكمل الاسم والإيميل وكلمة المرور (12 حرف على الأقل)", team_dept_required:"من فضلك اختار القسم", team_created_ok:"تم إضافة الموظف", team_login_hint:"الموظف يدخل من نفس رابط الفندق بالإيميل وكلمة المرور:", col_email:"الإيميل", password_label:"كلمة المرور", staff_nav_prearrivals:"قبل الوصول", staff_nav_feedback:"التقييمات", staff_nav_offers:"العروض والإيرادات",
     staff_nav_performance:"الأداء", performance_readonly_note:"مؤشرات فندقك الخاصة - رضا النزلاء، الفوترة، والإيرادات. للاطلاع فقط.",
     offers_add_new:"إضافة عرض جديد", offers_price:"السعر", offers_min_stay:"أقل عدد ليالي", offers_no_min_stay:"بدون حد أدنى",
     offers_time_window:"وقت التوفر", offers_no_window:"طوال اليوم", offers_type:"النوع",
@@ -1622,7 +1624,7 @@ const DICT = {
     username:"Email", password:"Password", select_department:"Select department",
     back:"Back", demo_hint:"Demo mode — any login details work",
     staff_nav_overview:"Overview", staff_nav_requests:"All Requests",
-    staff_nav_prearrivals:"Pre-Arrivals", staff_nav_feedback:"Feedback", staff_nav_offers:"Offers & Revenue",
+    staff_nav_guests:"Guests", staff_nav_team:"Team", guests_add_new:"Check In Guest", guests_none:"No guests checked in yet", guest_checkin_date:"Arrival Date", guest_checkout_date:"Departure Date", guest_checkout_btn:"Check Out", guest_checked_out:"Checked out", guest_in_house:"In house", guest_created_title:"Guest checked in - give them these login details", guest_code_once:"The access code is shown only once. If it is lost, check the guest out and check them in again.", guest_login_link:"Guest login link", guest_login_room:"Room number (username)", guest_login_code:"Access code (password)", guest_checkout_confirm:"Check this guest out? They will lose app access immediately.", guest_required:"Please enter the guest name and room number", done_label:"Done", team_add_new:"Add Staff Member", team_none:"No staff members yet", team_password_hint:"At least 12 characters - share it with the staff member; they can change it via \"Forgot password\"", team_required:"Please fill in name, email and a password of at least 12 characters", team_dept_required:"Please choose a department", team_created_ok:"Staff member added", team_login_hint:"Staff sign in from the same hotel link with their email and password:", col_email:"Email", password_label:"Password", staff_nav_prearrivals:"Pre-Arrivals", staff_nav_feedback:"Feedback", staff_nav_offers:"Offers & Revenue",
     staff_nav_performance:"Performance", performance_readonly_note:"Your hotel's own numbers - guest satisfaction, billing, and revenue. View only.",
     offers_add_new:"Add New Offer", offers_price:"Price", offers_min_stay:"Min. Nights", offers_no_min_stay:"No minimum",
     offers_time_window:"Time Window", offers_no_window:"All day", offers_type:"Type",
@@ -2737,12 +2739,14 @@ const STAFF_ICONS = {
   alerts:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
   offers: ICONS.offers,
+  guests:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/><path d="M8 11h.01M16 11h.01"/></svg>',
+  team:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="3"/><path d="M6 21v-1a6 6 0 0 1 12 0v1"/><circle cx="4.5" cy="10" r="2"/><circle cx="19.5" cy="10" r="2"/></svg>',
   performance:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
   settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
 const STAFF_NAV_BY_ROLE = {
-  owner:['overview','requests','prearrivals','feedback','offers','performance'],
-  manager:['overview','requests','prearrivals','feedback','offers','performance'],
+  owner:['overview','requests','guests','prearrivals','feedback','offers','performance','team'],
+  manager:['overview','requests','guests','prearrivals','feedback','offers','performance','team'],
   dept_manager:['requests'],
   staff:['requests'],
   platform_admin:['dashboard','hotels','analytics','users','audit','alerts','search','settings'],
@@ -2879,14 +2883,169 @@ function staffOfferForm(){
     </div>
   `;
 }
+/* ---------------- Owner/manager: Team (staff accounts) & Guests (check-in/out) ---------------- */
+// Backend already exposes /api/users (owner/manager manage their own hotel's
+// staff) and /api/guests (owner/manager/reception check guests in and out);
+// these two pages are the missing UI for them.
+let STAFF_TEAM = null;
+let STAFF_TEAM_FORM_OPEN = false;
+let STAFF_GUESTS = null;
+let STAFF_GUESTS_FORM_OPEN = false;
+let STAFF_LAST_GUEST = null; // {name, room, accessCode} - shown once after check-in
+function isReceptionOrAbove(){
+  return S.staff.role==='owner' || S.staff.role==='manager' || (S.staff.role==='dept' && S.staff.dept==='reception');
+}
+function staffNavItems(){
+  const role = S.staff.role;
+  // Department users are stored as role 'dept' on the frontend (see
+  // unifiedLogin); map them to the backend role list.
+  let items = (STAFF_NAV_BY_ROLE[role] || (role==='dept' ? STAFF_NAV_BY_ROLE.staff : [])).slice();
+  if(role==='dept' && S.staff.dept==='reception' && !items.includes('guests')) items.push('guests');
+  return items;
+}
+function hotelLoginLink(){
+  return `${location.origin}/?hotel=${encodeURIComponent(HOTEL_SLUG)}`;
+}
+async function refreshStaffTeam(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    STAFF_TEAM = await apiCall('/api/users', {token}) || [];
+    if(STAFF_CURRENT==='team') staffRender();
+  }catch(e){ if(STAFF_TEAM===null){ STAFF_TEAM = []; if(STAFF_CURRENT==='team') staffRender(); } }
+}
+function toggleStaffTeamForm(){ STAFF_TEAM_FORM_OPEN = !STAFF_TEAM_FORM_OPEN; staffRender(); }
+function onTeamRoleChange(){
+  const role = document.getElementById('st-role').value;
+  const wrap = document.getElementById('st-dept-wrap');
+  if(wrap) wrap.style.display = role==='manager' ? 'none' : '';
+}
+async function submitStaffUser(btn){
+  const name = document.getElementById('st-name').value.trim();
+  const email = document.getElementById('st-email').value.trim();
+  const password = document.getElementById('st-pass').value;
+  const role = document.getElementById('st-role').value;
+  const department = role==='manager' ? undefined : document.getElementById('st-dept').value;
+  if(!name || !email || password.length < 12){ toast(t('team_required')); return; }
+  if(role!=='manager' && !department){ toast(t('team_dept_required')); return; }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    await apiCall('/api/users', {method:'POST', token:getStaffToken(), body:{name, email, password, role, department}});
+    toast(t('team_created_ok'));
+    STAFF_TEAM_FORM_OPEN = false;
+    await refreshStaffTeam();
+    staffRender();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }finally{ btn.disabled = false; btn.textContent = origText; }
+}
+async function toggleStaffUserActive(id, currentActive){
+  try{
+    await apiCall('/api/users/'+id, {method:'PATCH', token:getStaffToken(), body:{active: !currentActive}});
+    await refreshStaffTeam();
+  }catch(e){ toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed')); }
+}
+function staffTeamForm(){
+  const depts = (S.staff.enabledDepartments && S.staff.enabledDepartments.length ? S.staff.enabledDepartments : ALL_DEPARTMENTS);
+  const roles = S.staff.role==='owner' ? ['manager','dept_manager','staff'] : ['dept_manager','staff'];
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="grid grid-2">
+        <div class="field"><label>${t('col_name')}</label><input id="st-name" autocomplete="off"></div>
+        <div class="field"><label>${t('col_email')}</label><input id="st-email" type="email" autocomplete="off"></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="field"><label>${t('col_role')}</label>
+          <select id="st-role" onchange="onTeamRoleChange()">
+            ${roles.map(r=>`<option value="${r}" ${r==='staff'?'selected':''}>${escapeHtml(t('role_'+r))}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" id="st-dept-wrap"><label>${t('col_department')}</label>
+          <select id="st-dept">
+            ${depts.map(d=>`<option value="${escapeHtml(d)}">${escapeHtml(t('nav_'+d))}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>${t('password_label')}</label><input id="st-pass" type="text" autocomplete="new-password" minlength="12">
+        <p style="color:var(--muted); font-size:12px; margin:6px 0 0;">${t('team_password_hint')}</p></div>
+      <button class="btn" onclick="submitStaffUser(this)">${t('save_changes')}</button>
+    </div>
+  `;
+}
+async function refreshStaffGuests(){
+  try{
+    const token = getStaffToken();
+    if(!token) return;
+    STAFF_GUESTS = await apiCall('/api/guests', {token}) || [];
+    if(STAFF_CURRENT==='guests') staffRender();
+  }catch(e){ if(STAFF_GUESTS===null){ STAFF_GUESTS = []; if(STAFF_CURRENT==='guests') staffRender(); } }
+}
+function toggleStaffGuestsForm(){ STAFF_GUESTS_FORM_OPEN = !STAFF_GUESTS_FORM_OPEN; STAFF_LAST_GUEST = null; staffRender(); }
+function dismissLastGuest(){ STAFF_LAST_GUEST = null; staffRender(); }
+async function submitGuestCheckin(btn){
+  const name = document.getElementById('sg-name').value.trim();
+  const roomNumber = document.getElementById('sg-room').value.trim();
+  const checkinDate = document.getElementById('sg-in').value || undefined;
+  const checkoutDate = document.getElementById('sg-out').value || undefined;
+  if(!name || !roomNumber){ toast(t('guest_required')); return; }
+  const origText = btn.textContent; btn.disabled = true;
+  try{
+    const g = await apiCall('/api/guests', {method:'POST', token:getStaffToken(), body:{name, roomNumber, checkinDate, checkoutDate}});
+    STAFF_LAST_GUEST = {name: g.name, room: g.room_number, accessCode: g.accessCode};
+    STAFF_GUESTS_FORM_OPEN = false;
+    await refreshStaffGuests();
+    staffRender();
+  }catch(e){
+    toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed'));
+  }finally{ btn.disabled = false; btn.textContent = origText; }
+}
+async function checkoutGuest(id){
+  if(!confirmAction(t('guest_checkout_confirm'))) return;
+  try{
+    await apiCall('/api/guests/'+id, {method:'PATCH', token:getStaffToken(), body:{active:false}});
+    await refreshStaffGuests();
+  }catch(e){ toast(e.message || (LANG==='ar'?'فشلت العملية':'Action failed')); }
+}
+function confirmAction(msg){ try{ return window.confirm(msg); }catch(e){ return true; } }
+function staffGuestForm(){
+  const today = new Date().toISOString().slice(0,10);
+  return `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="grid grid-2">
+        <div class="field"><label>${t('col_guest')}</label><input id="sg-name" autocomplete="off"></div>
+        <div class="field"><label>${t('col_room')}</label><input id="sg-room" autocomplete="off"></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="field"><label>${t('guest_checkin_date')}</label><input id="sg-in" type="date" value="${today}"></div>
+        <div class="field"><label>${t('guest_checkout_date')}</label><input id="sg-out" type="date"></div>
+      </div>
+      <button class="btn" onclick="submitGuestCheckin(this)">${t('guests_add_new')}</button>
+    </div>
+  `;
+}
+function staffLastGuestCard(){
+  const g = STAFF_LAST_GUEST;
+  if(!g) return '';
+  return `
+    <div class="card" style="margin-bottom:16px; border:2px solid var(--gold, #c9a45c);">
+      <strong style="display:block; margin-bottom:10px;">${t('guest_created_title')}</strong>
+      <div class="list-item"><span>${t('col_guest')}</span><strong>${escapeHtml(g.name)}</strong></div>
+      <div class="list-item"><span>${t('guest_login_room')}</span><strong>${escapeHtml(g.room)}</strong></div>
+      <div class="list-item"><span>${t('guest_login_code')}</span><strong style="font-size:20px; letter-spacing:2px;">${escapeHtml(g.accessCode)}</strong></div>
+      <div class="list-item"><span>${t('guest_login_link')}</span><span style="direction:ltr; font-size:12.5px;">${escapeHtml(hotelLoginLink())}</span></div>
+      <p style="color:var(--muted); font-size:12.5px; margin:10px 0;">${t('guest_code_once')}</p>
+      <button class="btn sm secondary" onclick="dismissLastGuest()">${t('done_label')}</button>
+    </div>
+  `;
+}
 function buildStaffNav(){
-  const items = STAFF_NAV_BY_ROLE[S.staff.role] || [];
+  const items = staffNavItems();
   const sidenav = document.getElementById('staff-sidenav');
   const bottomnav = document.getElementById('staff-bottomnav');
   if(!sidenav || !bottomnav) return;
   sidenav.innerHTML=''; bottomnav.innerHTML='';
   items.forEach(key=>{
-    const label = key==='requests' && (S.staff.role==='dept_manager'||S.staff.role==='staff') ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('staff_nav_'+key));
+    const label = key==='requests' && (S.staff.role==='dept'||S.staff.role==='dept_manager'||S.staff.role==='staff') ? escapeHtml(t('nav_'+S.staff.dept)) : escapeHtml(t('staff_nav_'+key));
     const html = `<div class="nav-item ${STAFF_CURRENT===key?'active':''}" onclick="staffNav('${key}')">${STAFF_ICONS[key]}<span>${label}</span></div>`;
     sidenav.insertAdjacentHTML('beforeend', html);
     bottomnav.insertAdjacentHTML('beforeend', html);
@@ -2912,6 +3071,8 @@ function staffNav(key){
   }
   if(S.staff.loggedIn && (S.staff.role==='owner' || S.staff.role==='manager') && key==='offers') refreshStaffOffers();
   if(S.staff.loggedIn && (S.staff.role==='owner' || S.staff.role==='manager') && key==='performance') refreshStaffPerformance();
+  if(S.staff.loggedIn && (S.staff.role==='owner' || S.staff.role==='manager') && key==='team') refreshStaffTeam();
+  if(S.staff.loggedIn && isReceptionOrAbove() && key==='guests') refreshStaffGuests();
 }
 function staffRender(){
   const main = document.getElementById('staff-main');
@@ -3174,9 +3335,9 @@ function hpDepartmentsTab(h){
   const enabled = h.enabled_departments || [];
   return `
     <div class="card">
-      <div class="grid grid-2" style="margin-bottom:14px;">
+      <div class="dept-grid" style="margin-bottom:14px;">
         ${ALL_DEPARTMENTS.map(d=>`
-          <label class="row" style="gap:6px; font-size:13.5px;">
+          <label class="dept-check">
             <input type="checkbox" id="hs-dept-${d}" ${enabled.includes(d)?'checked':''}>
             <span>${escapeHtml(t('nav_'+d))}</span>
           </label>
@@ -4025,6 +4186,71 @@ const STAFF_RENDERERS = {
           </div>
           <p style="color:var(--muted); font-size:13.5px; margin:8px 0 0;">${escapeHtml(LANG==='ar'?f.commentAr:f.commentEn)}</p>
         </div>`).join('')}
+    `;
+  },
+  team(){
+    if(STAFF_TEAM===null){
+      return `${pageHead(t('staff_nav_team'))}<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+    }
+    return `
+      ${pageHead(t('staff_nav_team'), `${t('team_login_hint')} <span style="direction:ltr; display:inline-block;">${escapeHtml(hotelLoginLink())}</span>`)}
+      <div class="row between" style="margin-bottom:14px;">
+        <div></div>
+        <button class="btn sm" onclick="toggleStaffTeamForm()">${STAFF_TEAM_FORM_OPEN ? t('cancel') : t('team_add_new')}</button>
+      </div>
+      ${STAFF_TEAM_FORM_OPEN ? staffTeamForm() : ''}
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr><th>${t('col_name')}</th><th>${t('col_email')}</th><th>${t('col_role')}</th><th>${t('col_department')}</th><th>${t('col_status')}</th><th></th></tr></thead>
+          <tbody>
+            ${STAFF_TEAM.length===0 ? `<tr><td colspan="6" style="color:var(--muted); text-align:center;">${t('team_none')}</td></tr>` :
+            STAFF_TEAM.map(u=>`
+              <tr>
+                <td><strong>${escapeHtml(u.name)}</strong></td>
+                <td style="direction:ltr;">${escapeHtml(u.email)}</td>
+                <td>${escapeHtml(t('role_'+u.role))}</td>
+                <td>${u.department ? escapeHtml(t('nav_'+u.department)) : '-'}</td>
+                <td><span class="pill ${u.active?'':'danger'}">${u.active?t('status_active'):t('status_inactive')}</span></td>
+                <td class="actions">${(S.staff.role==='manager' && u.role==='manager') ? '-' : `<button class="btn sm secondary" onclick="toggleStaffUserActive(${Number(u.id)}, ${!!u.active})">${u.active?t('deactivate'):t('activate')}</button>`}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+  guests(){
+    if(!isReceptionOrAbove()) return pageHead(t('staff_nav_guests'));
+    if(STAFF_GUESTS===null){
+      return `${pageHead(t('staff_nav_guests'))}<div class="card"><p style="color:var(--muted)">${t('loading_label')}</p></div>`;
+    }
+    const inHouse = STAFF_GUESTS.filter(g=>g.active);
+    const past = STAFF_GUESTS.filter(g=>!g.active);
+    const row = g=>`
+      <tr>
+        <td>${escapeHtml(g.room_number)}</td>
+        <td><strong>${escapeHtml(g.name)}</strong></td>
+        <td>${g.checkin_date ? escapeHtml(String(g.checkin_date).slice(0,10)) : '-'}</td>
+        <td>${g.checkout_date ? escapeHtml(String(g.checkout_date).slice(0,10)) : '-'}</td>
+        <td><span class="pill ${g.active?'':'danger'}">${g.active?t('guest_in_house'):t('guest_checked_out')}</span></td>
+        <td class="actions">${g.active ? `<button class="btn sm secondary" onclick="checkoutGuest(${Number(g.id)})">${t('guest_checkout_btn')}</button>` : '-'}</td>
+      </tr>`;
+    return `
+      ${pageHead(t('staff_nav_guests'), `${inHouse.length} ${t('guest_in_house')}`)}
+      <div class="row between" style="margin-bottom:14px;">
+        <div></div>
+        <button class="btn sm" onclick="toggleStaffGuestsForm()">${STAFF_GUESTS_FORM_OPEN ? t('cancel') : t('guests_add_new')}</button>
+      </div>
+      ${staffLastGuestCard()}
+      ${STAFF_GUESTS_FORM_OPEN ? staffGuestForm() : ''}
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead><tr><th>${t('col_room')}</th><th>${t('col_guest')}</th><th>${t('guest_checkin_date')}</th><th>${t('guest_checkout_date')}</th><th>${t('col_status')}</th><th></th></tr></thead>
+          <tbody>
+            ${STAFF_GUESTS.length===0 ? `<tr><td colspan="6" style="color:var(--muted); text-align:center;">${t('guests_none')}</td></tr>` :
+            inHouse.concat(past).map(row).join('')}
+          </tbody>
+        </table>
+      </div>
     `;
   },
   offers(){
